@@ -30,12 +30,17 @@ Games.df <- googlesheets4::read_sheet(url,
 ```{r}
 names(Games.df)
 ```
+Average over all games
+```{r}
+mean(Games.df$DTperPoint)
+```
 
 Average ratio by player
 ```{r}
-plyr <- "Craig"
+plyr <- "Didi"
 
 Games.df |>
+#  dplyr::filter(Event == "Winter 24-25") |>
   dplyr::filter(Player1a == plyr | Player1b == plyr | Player2a == plyr | Player2b == plyr) |>
   dplyr::summarize(AvgFun = mean(DTperPoint))
 ```
