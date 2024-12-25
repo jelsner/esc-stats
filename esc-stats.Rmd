@@ -42,6 +42,28 @@ plyr <- "Didi"
 Games.df |>
 #  dplyr::filter(Event == "Winter 24-25") |>
   dplyr::filter(Player1a == plyr | Player1b == plyr | Player2a == plyr | Player2b == plyr) |>
-  dplyr::summarize(AvgFun = mean(DTperPoint))
+  dplyr::summarize(AvgFun = mean(DTperPoint),
+                   MinFun = min(DTperPoint),
+                   MaxFun = max(DTperPoint))
+```
+
+```{r}
+plyrs <- unique(c(Games.df$Player1a, Games.df$Player1b, Games.df$Player2a, Games.df$Player2b))
+
+attach(Games.df)
+Least <- NULL
+Avg <- NULL
+Most <- NULL
+Games <- NULL
+for(i in 1:length(plyrs)){
+  Games = c(Games, length(DTperPoint[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
+  Least = c(Least, min(DTperPoint[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
+  Avg = c(Avg, mean(DTperPoint[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
+  Most = c(Most, max(DTperPoint[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
+}
+detach(Games.df)
+
+FunIndex.df <- data.frame(Player = plyrs, Games, Least, Avg, Most)
+
 ```
 
