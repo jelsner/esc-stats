@@ -1,0 +1,42 @@
+---
+title: "Game Statistics on Escape!! Frisbee"
+output: html_document
+date: "2024-12-24"
+---
+
+Authorization
+```{r}
+library(googlesheets4)
+
+# De-authorize any existing token
+googlesheets4::gs4_deauth()
+
+# Explicitly authorize with the appropriate scope
+googlesheets4::gs4_auth(
+  scopes = "https://www.googleapis.com/auth/spreadsheets.readonly"
+)
+```
+
+Read the sheet
+```{r}
+url <- "https://docs.google.com/spreadsheets/d/1CPPBCwuwYP9lqWUS7Lu5ogXHtdpX_-i_lzcdtsohbwY/edit#gid=0"
+Games.df <- googlesheets4::read_sheet(url,
+                                        range = "A1:M",
+                                        na = "NA",
+                                        col_types = "ccncncccccnnn"
+                                        )
+```
+
+```{r}
+names(Games.df)
+```
+
+Average ratio by player
+```{r}
+plyr <- "Craig"
+
+Games.df |>
+  dplyr::filter(Player1a == plyr | Player1b == plyr | Player2a == plyr | Player2b == plyr) |>
+  dplyr::summarize(AvgFun = mean(DTperPoint))
+```
+
