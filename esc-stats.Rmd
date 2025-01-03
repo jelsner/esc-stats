@@ -2,6 +2,8 @@
 title: "Game Statistics on Escape!! Frisbee"
 output: html_document
 date: "2024-12-24"
+editor_options: 
+  chunk_output_type: console
 ---
 
 Authorization
@@ -37,7 +39,7 @@ mean(Games.df$DTperPoint)
 
 Average ratio by player
 ```{r}
-plyr <- "Didi"
+plyr <- "Craig"
 
 Games.df |>
 #  dplyr::filter(Event == "Winter 24-25") |>
@@ -66,4 +68,18 @@ detach(Games.df)
 FunIndex.df <- data.frame(Player = plyrs, Games, Least, Avg, Most)
 
 ```
+
+Statistics by game type (Classic vs Escape!!)
+```{r}
+remove <- c("Ian", "Maya", "Augie", "Chris") # least experienced players
+Games.df |>
+  dplyr::filter(!Player1a %in% remove & !Player1b %in% remove & !Player2a %in% remove & !Player2b %in% remove) |>
+  dplyr::group_by(Type) |>
+  dplyr::summarise(Games = dplyr::n(),
+                   Least = min(DTperPoint),
+                   Avg = mean(DTperPoint),
+                   Most = max(DTperPoint),
+                   PerGT1 = sum(DTperPoint >= 1)/Games)
+```
+
 
