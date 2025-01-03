@@ -49,6 +49,7 @@ Games.df |>
                    MaxFun = max(DTperPoint))
 ```
 
+Statistics by player
 ```{r}
 plyrs <- unique(c(Games.df$Player1a, Games.df$Player1b, Games.df$Player2a, Games.df$Player2b))
 
@@ -81,5 +82,17 @@ Games.df |>
                    Most = max(DTperPoint),
                    PerGT1 = sum(DTperPoint >= 1)/Games)
 ```
+
+Which games were most "fun" by player
+```{r}
+plyr <- "Oscar"
+
+Games.df |>
+  dplyr::filter(Player1a == plyr | Player1b == plyr | Player2a == plyr | Player2b == plyr) |>
+  dplyr::arrange(desc(DTperPoint)) |>
+  dplyr::select(Date, Teams, DTperPoint)
+```
+
+
 
 
