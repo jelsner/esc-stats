@@ -98,6 +98,3 @@ Games.df |>
   dplyr::select(Date, Teams, DTperPoint)
 ```
 
-
-
-
