@@ -66,21 +66,26 @@ for(i in 1:length(plyrs)){
 }
 detach(Games.df)
 
-FunIndex.df <- data.frame(Player = plyrs, Games, Least, Avg, Most)
+Fundex.df <- data.frame(Player = plyrs, Games, 
+                        Least = round(Least, 2), 
+                        Average = round(Avg, 2), 
+                        Most = round(Most, 2)) |>
+  dplyr::filter(Games > 10) |>
+  dplyr::arrange(desc(Average))
 
 ```
 
 Statistics by game type (Classic vs Escape!!)
 ```{r}
-remove <- c("Ian", "Maya", "Augie", "Chris") # least experienced players
+remove <- c("Maya", "Augie", "Chris", "Cat") # least experienced players
 Games.df |>
   dplyr::filter(!Player1a %in% remove & !Player1b %in% remove & !Player2a %in% remove & !Player2b %in% remove) |>
   dplyr::group_by(Type) |>
   dplyr::summarise(Games = dplyr::n(),
-                   Least = min(DTperPoint),
-                   Avg = mean(DTperPoint),
-                   Most = max(DTperPoint),
-                   PerGT1 = sum(DTperPoint >= 1)/Games)
+                   Least = round(min(DTperPoint), 2),
+                   Average = round(mean(DTperPoint), 2),
+                   Most = round(max(DTperPoint), 2), 
+                   PercentGamesGT1 = sum(DTperPoint >= 1)/Games)
 ```
 
 Which games were most "fun" by player
