@@ -39,7 +39,7 @@ mean(Games.df$DTperPoint)
 
 Average ratio by player
 ```{r}
-plyr <- "Craig"
+plyr <- "Mike"
 
 Games.df |>
 #  dplyr::filter(Event == "Winter 24-25") |>
@@ -81,6 +81,20 @@ remove <- c("Maya", "Augie", "Chris", "Cat") # least experienced players
 Games.df |>
   dplyr::filter(!Player1a %in% remove & !Player1b %in% remove & !Player2a %in% remove & !Player2b %in% remove) |>
   dplyr::group_by(Type) |>
+  dplyr::summarise(Games = dplyr::n(),
+                   Least = round(min(DTperPoint), 2),
+                   Average = round(mean(DTperPoint), 2),
+                   Most = round(max(DTperPoint), 2), 
+                   PercentGamesGT1 = sum(DTperPoint >= 1)/Games)
+```
+
+Statistics by court separation distance
+```{r}
+#remove <- c("Maya", "Augie", "Chris", "Cat") # least experienced players
+Games.df |>
+#  dplyr::filter(!Player1a %in% remove & !Player1b %in% remove & !Player2a %in% remove & !Player2b %in% remove) |>
+  dplyr::filter(Event == "Winter League") |>
+  dplyr::group_by(CourtSeparation) |>
   dplyr::summarise(Games = dplyr::n(),
                    Least = round(min(DTperPoint), 2),
                    Average = round(mean(DTperPoint), 2),
