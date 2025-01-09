@@ -23,9 +23,9 @@ Read the sheet
 ```{r}
 url <- "https://docs.google.com/spreadsheets/d/1CPPBCwuwYP9lqWUS7Lu5ogXHtdpX_-i_lzcdtsohbwY/edit#gid=0"
 Games.df <- googlesheets4::read_sheet(url,
-                                        range = "A1:M",
+                                        range = "A1:N",
                                         na = "NA",
-                                        col_types = "ccncncccccnnn"
+                                        col_types = "cccncncccccnnn"
                                         )
 ```
 
@@ -37,7 +37,7 @@ Average over all games
 mean(Games.df$DTperPoint)
 ```
 
-Average ratio by player
+Fundex by player
 ```{r}
 plyr <- "Mike"
 
@@ -58,20 +58,26 @@ Least <- NULL
 Avg <- NULL
 Most <- NULL
 Games <- NULL
+DT <- NULL
+TP <- NULL
 for(i in 1:length(plyrs)){
   Games = c(Games, length(DTperPoint[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
   Least = c(Least, min(DTperPoint[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
   Avg = c(Avg, mean(DTperPoint[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
   Most = c(Most, max(DTperPoint[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
+  DT = c(DT, sum(`DoubleTroubles (DT)`[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
+  TP = c(TP, sum(TotalPoints[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
+  Avg2 = DT/TP
 }
 detach(Games.df)
 
 Fundex.df <- data.frame(Player = plyrs, Games, 
                         Least = round(Least, 2), 
                         Average = round(Avg, 2), 
-                        Most = round(Most, 2)) |>
+                        Most = round(Most, 2),
+                        Average2 = round(Avg2, 2)) |>
   dplyr::filter(Games > 10) |>
-  dplyr::arrange(desc(Average))
+  dplyr::arrange(desc(Average2))
 
 ```
 
@@ -80,11 +86,14 @@ Statistics by game type (Classic vs Escape!!)
 remove <- c("Maya", "Augie", "Chris", "Cat") # least experienced players
 Games.df |>
   dplyr::filter(!Player1a %in% remove & !Player1b %in% remove & !Player2a %in% remove & !Player2b %in% remove) |>
-  dplyr::group_by(Type) |>
+  dplyr::group_by(PlayStyle) |>
   dplyr::summarise(Games = dplyr::n(),
                    Least = round(min(DTperPoint), 2),
-                   Average = round(mean(DTperPoint), 2),
+                   AvgRatio = round(mean(DTperPoint), 2),
                    Most = round(max(DTperPoint), 2), 
+                   DT = sum(`DoubleTroubles (DT)`),
+                   TP = sum(TotalPoints),
+                   Fundex = DT/TP,
                    PercentGamesGT1 = sum(DTperPoint >= 1)/Games)
 ```
 
