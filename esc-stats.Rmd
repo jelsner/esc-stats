@@ -34,7 +34,8 @@ names(Games.df)
 ```
 Average over all games
 ```{r}
-mean(Games.df$DTperPoint)
+mean(Games.df$Fundex)
+sum(Games.df$DoubleTroubles) / sum(Games.df$TotalPoints)
 ```
 
 Fundex by player
@@ -44,9 +45,9 @@ plyr <- "Mike"
 Games.df |>
 #  dplyr::filter(Event == "Winter 24-25") |>
   dplyr::filter(Player1a == plyr | Player1b == plyr | Player2a == plyr | Player2b == plyr) |>
-  dplyr::summarize(AvgFun = mean(DTperPoint),
-                   MinFun = min(DTperPoint),
-                   MaxFun = max(DTperPoint))
+  dplyr::summarize(AvgFun = mean(Fundex),
+                   MinFun = min(Fundex),
+                   MaxFun = max(Fundex))
 ```
 
 Statistics by player
@@ -61,11 +62,11 @@ Games <- NULL
 DT <- NULL
 TP <- NULL
 for(i in 1:length(plyrs)){
-  Games = c(Games, length(DTperPoint[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
-  Least = c(Least, min(DTperPoint[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
-  Avg = c(Avg, mean(DTperPoint[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
-  Most = c(Most, max(DTperPoint[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
-  DT = c(DT, sum(`DoubleTroubles (DT)`[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
+  Games = c(Games, length(Fundex[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
+  Least = c(Least, min(Fundex[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
+  Avg = c(Avg, mean(Fundex[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
+  Most = c(Most, max(Fundex[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
+  DT = c(DT, sum(DoubleTroubles[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
   TP = c(TP, sum(TotalPoints[Player1a == plyrs[i] | Player1b == plyrs[i] | Player2a == plyrs[i] | Player2b == plyrs[i]]))
   Avg2 = DT/TP
 }
@@ -83,32 +84,35 @@ Fundex.df <- data.frame(Player = plyrs, Games,
 
 Statistics by game type (Classic vs Escape!!)
 ```{r}
-remove <- c("Maya", "Augie", "Chris", "Cat") # least experienced players
+#remove <- c("Maya", "Augie", "Chris", "Cat") # least experienced players
 Games.df |>
-  dplyr::filter(!Player1a %in% remove & !Player1b %in% remove & !Player2a %in% remove & !Player2b %in% remove) |>
+#  dplyr::filter(!Player1a %in% remove & !Player1b %in% remove & !Player2a %in% remove & !Player2b %in% remove) |>
   dplyr::group_by(PlayStyle) |>
   dplyr::summarise(Games = dplyr::n(),
-                   Least = round(min(DTperPoint), 2),
-                   AvgRatio = round(mean(DTperPoint), 2),
-                   Most = round(max(DTperPoint), 2), 
-                   DT = sum(`DoubleTroubles (DT)`),
+                   Least = round(min(Fundex), 2),
+                   AvgRatio = round(mean(Fundex), 2),
+                   Most = round(max(Fundex), 2), 
+                   DT = sum(DoubleTroubles),
                    TP = sum(TotalPoints),
-                   Fundex = DT/TP,
-                   PercentGamesGT1 = sum(DTperPoint >= 1)/Games)
+                   Fun = DT/TP,
+                   PercentGamesGT1 = sum(Fundex >= 1)/Games)
 ```
 
 Statistics by court separation distance
 ```{r}
-#remove <- c("Maya", "Augie", "Chris", "Cat") # least experienced players
+#remove <- c("Drew", "Craig", "Zack") 
 Games.df |>
 #  dplyr::filter(!Player1a %in% remove & !Player1b %in% remove & !Player2a %in% remove & !Player2b %in% remove) |>
   dplyr::filter(Event == "Winter League") |>
   dplyr::group_by(CourtSeparation) |>
   dplyr::summarise(Games = dplyr::n(),
-                   Least = round(min(DTperPoint), 2),
-                   Average = round(mean(DTperPoint), 2),
-                   Most = round(max(DTperPoint), 2), 
-                   PercentGamesGT1 = sum(DTperPoint >= 1)/Games)
+                   Least = round(min(Fundex), 2),
+                   AvgRatio = round(mean(Fundex), 2),
+                   Most = round(max(Fundex), 2), 
+                   DT = sum(DoubleTroubles),
+                   TP = sum(TotalPoints),
+                   Fun = DT/TP,
+                   FracGamesGT1 = sum(Fundex >= 1)/Games)
 ```
 
 Which games were most "fun" by player
@@ -117,7 +121,7 @@ plyr <- "Oscar"
 
 Games.df |>
   dplyr::filter(Player1a == plyr | Player1b == plyr | Player2a == plyr | Player2b == plyr) |>
-  dplyr::arrange(desc(DTperPoint)) |>
-  dplyr::select(Date, Teams, DTperPoint)
+  dplyr::arrange(desc(Fundex)) |>
+  dplyr::select(Date, Teams, Fundex)
 ```
 
