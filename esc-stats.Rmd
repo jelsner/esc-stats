@@ -100,7 +100,7 @@ Games.df |>
 
 Statistics by court separation distance
 ```{r}
-#remove <- c("Drew", "Craig", "Zack") 
+#remove <- c("Drew", "Craig", "Zack")
 Games.df |>
 #  dplyr::filter(!Player1a %in% remove & !Player1b %in% remove & !Player2a %in% remove & !Player2b %in% remove) |>
   dplyr::filter(Event == "Winter League") |>
