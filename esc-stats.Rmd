@@ -100,10 +100,27 @@ Games.df |>
 
 Statistics by court separation distance
 ```{r}
-#remove <- c("Drew", "Craig", "Zack")
+remove <- c("Drew", "Craig", "Zack")
 Games.df |>
-#  dplyr::filter(!Player1a %in% remove & !Player1b %in% remove & !Player2a %in% remove & !Player2b %in% remove) |>
+  dplyr::filter(!Player1a %in% remove & !Player1b %in% remove & !Player2a %in% remove & !Player2b %in% remove) |>
   dplyr::filter(Event == "Winter League") |>
+  dplyr::group_by(CourtSeparation) |>
+  dplyr::summarise(Games = dplyr::n(),
+                   Least = round(min(Fundex), 2),
+                   AvgRatio = round(mean(Fundex), 2),
+                   Most = round(max(Fundex), 2), 
+                   DT = sum(DoubleTroubles),
+                   TP = sum(TotalPoints),
+                   Fun = DT/TP,
+                   FracGamesGT1 = sum(Fundex >= 1)/Games)
+```
+
+Statistics by court separation distance, keep only single player
+```{r}
+player <- "Maya"
+Games.df |>
+  dplyr::filter(Player1a == player | Player1b == player | Player2a == player | Player2b == player) |>
+  dplyr::filter(Event == "Winter League" | Event == "Summer League") |>
   dplyr::group_by(CourtSeparation) |>
   dplyr::summarise(Games = dplyr::n(),
                    Least = round(min(Fundex), 2),
