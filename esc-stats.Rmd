@@ -40,10 +40,10 @@ sum(Games.df$DoubleTroubles) / sum(Games.df$TotalPoints)
 
 Fundex by player
 ```{r}
-plyr <- "Mike"
+plyr <- "Didi"
 
 Games.df |>
-#  dplyr::filter(Event == "Winter 24-25") |>
+#  dplyr::filter(Event == "Winter League") |>
   dplyr::filter(Player1a == plyr | Player1b == plyr | Player2a == plyr | Player2b == plyr) |>
   dplyr::summarize(AvgFun = mean(Fundex),
                    MinFun = min(Fundex),
@@ -77,16 +77,16 @@ Fundex.df <- data.frame(Player = plyrs, Games,
                         Average = round(Avg, 2), 
                         Most = round(Most, 2),
                         Average2 = round(Avg2, 2)) |>
-  dplyr::filter(Games > 10) |>
+  dplyr::filter(Games > 5) |>
   dplyr::arrange(desc(Average2))
 
 ```
 
 Statistics by game type (Classic vs Escape!!)
 ```{r}
-#remove <- c("Maya", "Augie", "Chris", "Cat") # least experienced players
+remove <- c("Ian", "Maya", "Augie", "Chris", "Cat") # least experienced players
 Games.df |>
-#  dplyr::filter(!Player1a %in% remove & !Player1b %in% remove & !Player2a %in% remove & !Player2b %in% remove) |>
+  dplyr::filter(!Player1a %in% remove & !Player1b %in% remove & !Player2a %in% remove & !Player2b %in% remove) |>
   dplyr::group_by(PlayStyle) |>
   dplyr::summarise(Games = dplyr::n(),
                    Least = round(min(Fundex), 2),
