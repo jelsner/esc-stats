@@ -134,10 +134,10 @@ t.test(short$Fundex, long$Fundex)
 
 Statistics by court separation distance, keep only single player
 ```{r}
-player <- "Didi"
+player <- c("Craig")
 Games.df |>
-  dplyr::filter(Player1a == player | Player1b == player | Player2a == player | Player2b == player) |>
-  dplyr::filter(Event == "Winter League") |>
+  dplyr::filter(Player1a %in% player | Player1b %in% player | Player2a %in% player | Player2b %in% player) |>
+#  dplyr::filter(Event == "Winter League") |>
   dplyr::group_by(CourtSeparation) |>
   dplyr::summarise(Games = dplyr::n(),
                    Least = round(min(Fundex), 2),
