@@ -1,0 +1,42 @@
+---
+title: "DDC events over time"
+output: html_document
+date: "2025-05-12"
+---
+
+Load packages
+```{r}
+library(ggplot2)
+library(readr)
+library(dplyr)
+```
+
+To read directly from the Google Sheet, you can publish it as a CSV link. In Google Sheets, go to File > Share > Publish to the web, publish the sheet as CSV, copy the link and replace it below
+```{r}
+url <- "https://docs.google.com/spreadsheets/d/e/2PACX-1vSQTu-kLSlcLhALNLn_o2ums1qsEdZR7I5F850n7kgya5wvg84Y_Ui4v0983drYi-mBILbEAGhG_Kud/pub?gid=0&single=true&output=csv"
+```
+
+Load and plot the data
+```{r}
+# Read the data
+ddc_data <- read_csv(url)
+
+# Make sure columns are correct. Rename for clarity if needed
+colnames(ddc_data) <- c("Year", "Eventcount")
+
+ddc_data <- ddc_data |>
+  mutate(Decade = paste0(floor(Year / 10) * 10, "s"))
+
+
+# Create the bar chart
+ggplot(ddc_data, aes(x = factor(Year), y = Eventcount, fill = Decade)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Number of DDC Events per Year",
+       x = "Year",
+       y = "Event Count",
+       fill = "Decade") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
