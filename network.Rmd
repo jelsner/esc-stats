@@ -1,0 +1,65 @@
+---
+title: "Player network"
+output: html_document
+date: "2025-05-12"
+editor_options: 
+  chunk_output_type: console
+---
+
+Build a network graph of Double Disc Court (DDC) players and their teammates to visualize connections in the competitive community
+
+Since you're working with data from https://doubledisccourt.com/results, the basic idea is to: Scrape the event pages to extract teams and players, count participation frequency to identify the top 25 players, build a graph where each edge represents a team connection, visualize the network in R using {igraph} and optionally {ggraph}
+
+Install and load required libraries
+```{r}
+install.packages(c("rvest", "dplyr", "stringr", "igraph", "ggraph", "tidygraph"))
+
+library(rvest)
+library(dplyr)
+library(stringr)
+library(igraph)
+library(ggraph)
+library(tidygraph)
+```
+
+Scrape team data from each event. We'll assume a list of event URLs (or you can scrape them from the main page)
+
+```{r}
+base_url <- "https://doubledisccourt.com"
+results_url <- paste0(base_url, "/results/")
+
+# Get all event links
+event_links <- read_html(results_url) %>%
+  html_nodes("a") %>%
+  html_attr("href") %>%
+  str_subset("/results/\\d{4}") %>%
+  unique()
+
+# Function to extract teams from each event page
+extract_teams <- function(event_url) {
+  page <- read_html(paste0(base_url, event_url))
+  
+  # Scrape team names assuming "Player A / Player B" format
+  team_lines <- page %>%
+    html_nodes("li") %>%
+    html_text() %>%
+    str_subset("/")
+
+  team_df <- data.frame()
+  for (line in team_lines) {
+    players <- str_split(line, "/")[[1]] %>%
+      str_trim()
+    if (length(players) == 2) {
+      team_df <- rbind(team_df, data.frame(player1 = players[1], player2 = players[2]))
+    }
+  }
+  return(team_df)
+}
+
+# Combine all team entries
+all_teams <- do.call(rbind, lapply(event_links, extract_teams))
+
+```
+
+
+
