@@ -1,0 +1,8 @@
+---
+title: "video automation"
+output: html_document
+date: "2025-05-13"
+---
+
+
+

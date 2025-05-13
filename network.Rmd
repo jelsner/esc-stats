@@ -25,41 +25,44 @@ library(tidygraph)
 Scrape team data from each event. We'll assume a list of event URLs (or you can scrape them from the main page)
 
 ```{r}
-base_url <- "https://doubledisccourt.com"
-results_url <- paste0(base_url, "/results/")
+library(chromote)
+library(rvest)
 
-# Get all event links
-event_links <- read_html(results_url) %>%
-  html_nodes("a") %>%
-  html_attr("href") %>%
-  str_subset("/results/\\d{4}") %>%
-  unique()
+# Load tournament page
+url <- "https://doubledisccourt.com/results/tournament.html?id=551"
+b <- ChromoteSession$new()
+b$Page$navigate(url)
+Sys.sleep(5)  # wait for JS to populate the page
 
-# Function to extract teams from each event page
-extract_teams <- function(event_url) {
-  page <- read_html(paste0(base_url, event_url))
-  
-  # Scrape team names assuming "Player A / Player B" format
-  team_lines <- page %>%
-    html_nodes("li") %>%
-    html_text() %>%
-    str_subset("/")
+# Extract rendered HTML
+html_doc <- b$DOM$getDocument()
+source <- b$DOM$getOuterHTML(nodeId = html_doc$root$nodeId)[["outerHTML"]]
+page <- read_html(source)
 
-  team_df <- data.frame()
-  for (line in team_lines) {
-    players <- str_split(line, "/")[[1]] %>%
-      str_trim()
-    if (length(players) == 2) {
-      team_df <- rbind(team_df, data.frame(player1 = players[1], player2 = players[2]))
+# Extract <li> elements in the tournament result list
+teams <- page %>% html_nodes("ul.form li")
+
+# Skip the header row and parse player names
+team_data <- lapply(teams[-1], function(team) {
+  cells <- team %>% html_nodes("div.dataCell")
+  if (length(cells) >= 2) {
+    names <- cells[2] %>%
+      html_nodes("a") %>%
+      html_text(trim = TRUE)
+    
+    if (length(names) == 2) {
+      data.frame(Player1 = names[1], Player2 = names[2], stringsAsFactors = FALSE)
+    } else {
+      NULL
     }
+  } else {
+    NULL
   }
-  return(team_df)
-}
+})
 
-# Combine all team entries
-all_teams <- do.call(rbind, lapply(event_links, extract_teams))
-
+# Combine into a data frame
+df <- bind_rows(team_data)
+print(df)
 ```
-
 
 
