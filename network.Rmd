@@ -1,5 +1,5 @@
 ---
-title: "Player network"
+title: "Player team network"
 output: html_document
 date: "2025-05-12"
 editor_options: 
@@ -8,7 +8,7 @@ editor_options:
 
 Build a network graph of Double Disc Court (DDC) players and their teammates to visualize connections in the competitive community
 
-Since you're working with data from https://doubledisccourt.com/results, the basic idea is to: Scrape the event pages to extract teams and players, count participation frequency to identify the top 25 players, build a graph where each edge represents a team connection, visualize the network in R using {igraph} and optionally {ggraph}
+Working with data from https://doubledisccourt.com/results, the basic idea is to: Scrape the event pages to extract teams and players, count participation frequency to identify the top 25 players, build a graph where each edge represents a team, visualize the network in R using {igraph} and optionally {ggraph}
 
 Install and load required libraries
 ```{r}
@@ -22,14 +22,14 @@ library(ggraph)
 library(tidygraph)
 ```
 
-Scrape team data from each event. We'll assume a list of event URLs (or you can scrape them from the main page)
+Scrape team data from each event. Start with one tournament url
 
 ```{r}
 library(chromote)
 library(rvest)
 
 # Load tournament page
-url <- "https://doubledisccourt.com/results/tournament.html?id=551"
+url <- "https://doubledisccourt.com/results/tournament.html?id=603"
 b <- ChromoteSession$new()
 b$Page$navigate(url)
 Sys.sleep(5)  # wait for JS to populate the page
@@ -64,5 +64,92 @@ team_data <- lapply(teams[-1], function(team) {
 df <- bind_rows(team_data)
 print(df)
 ```
+
+Loop over all event pages
+```{r}
+library(purrr)
+
+# Function to parse one event
+scrape_ddc_event <- function(id) {
+  print(id)
+  url <- paste0("https://doubledisccourt.com/results/tournament.html?id=", id)
+  b <- ChromoteSession$new()
+  b$Page$navigate(url)
+  Sys.sleep(5)
+
+  html_doc <- b$DOM$getDocument()
+  source <- b$DOM$getOuterHTML(nodeId = html_doc$root$nodeId)[["outerHTML"]]
+  b$close()
+
+  page <- read_html(source)
+
+  # Check for King-style or solo-format events
+  if (grepl("King of the Court|Monarch of the Court|Solo format", page %>% html_text(), ignore.case = TRUE)) {
+    return(NULL)
+  }
+
+  # Extract year from <title>
+  title_text <- page %>% html_node("title") %>% html_text()
+  year_match <- str_extract(title_text, "\\b(19|20)\\d{2}\\b")
+  event_year <- ifelse(is.na(year_match), NA, as.integer(year_match))
+
+  # Get all division headers and corresponding result lists
+  headers <- page %>% html_nodes("div.header")
+  result_lists <- page %>% html_nodes("ul.form")
+
+  # Safety check
+  if (length(headers) == 0 || length(headers) != length(result_lists)) return(NULL)
+
+  all_divisions <- list()
+
+  for (i in seq_along(headers)) {
+    div_name <- headers[i] %>% html_text(trim = TRUE)
+    teams <- result_lists[[i]] %>% html_nodes("li")
+
+    if (length(teams) < 2) next
+
+    # Parse each <li> in the division's result list
+    team_data <- lapply(teams[-1], function(team) {
+      cells <- team %>% html_nodes("div.dataCell")
+      if (length(cells) >= 2) {
+        place <- cells[1] %>% html_text(trim = TRUE)
+        names <- cells[2] %>% html_nodes("a") %>% html_text(trim = TRUE)
+
+        if (length(names) == 2) {
+          return(data.frame(
+            Year = event_year,
+            Division = div_name,
+            Place = place,
+            Player1 = names[1],
+            Player2 = names[2],
+            TournamentID = id,
+            stringsAsFactors = FALSE
+          ))
+        }
+      }
+      return(NULL)
+    })
+
+    all_divisions[[i]] <- bind_rows(team_data)
+  }
+
+  df <- bind_rows(all_divisions)
+  if (nrow(df) == 0) return(NULL)
+  return(df)
+}
+
+# Loop through a range of event IDs
+event_ids <- 1:602
+
+all_teams <- map_dfr(event_ids, possibly(scrape_ddc_event, NULL))
+
+# Save to CSV
+write.csv(all_teams, "data/output/ddc_team_data.csv", row.names = FALSE)
+
+# View a sample
+print(head(all_teams))
+
+```
+
 
 
