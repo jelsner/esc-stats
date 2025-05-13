@@ -8,6 +8,12 @@ date: "2025-05-13"
 install.packages("remotes")
 ```
 
+```{bash}
+ffmpeg -i "data/13 April 2025 OG.m4a" -acodec pcm_s16le -ar 16000 -ac 1 data/output.wav
+whisper output.wav --output_format json --output_dir .
+```
+
+
 ```{r}
 library(jsonlite)
 library(dplyr)
