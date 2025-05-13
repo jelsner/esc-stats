@@ -4,5 +4,39 @@ output: html_document
 date: "2025-05-13"
 ---
 
+```{r}
+install.packages("remotes")
+```
+
+```{r}
+library(jsonlite)
+library(dplyr)
+
+# Load Whisper JSON output
+transcript <- fromJSON("data/09_Feb_2025_Game.json")
+segments <- transcript$segments
+
+# Find lines with the word "throw"
+tip_segments <- segments[grep("\\btip\\b", tolower(segments$text)), ]
+
+# Add estimated escape window duration
+tip_segments$duration_to_next <- c(diff(tip_segments$start), NA)
+tip_segments$likely_escape <- tip_segments$duration_to_next > 6
+
+# Build metadata table
+metadata <- tip_segments %>%
+  mutate(
+    video = "09_Feb_2025_Game.wav",
+    timestamp = format(as.POSIXct(start, origin = "1970-01-01", tz = "UTC"), "%H:%M:%S"),
+    event_type = "Escape Attempt",
+    confidence = round(pmin(1, duration_to_next / 12), 2)
+  ) %>%
+  select(video, timestamp, event_type, confidence, text)
+
+# Save to CSV
+write.csv(metadata, "escape_candidates.csv", row.names = FALSE)
+
+```
+
 
 
