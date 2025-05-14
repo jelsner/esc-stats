@@ -151,5 +151,198 @@ print(head(all_teams))
 
 ```
 
+Code to create a plot the network graph
+```{r}
+library(dplyr)
+library(igraph)
+library(ggraph)
+library(tidygraph)
 
+# Step 1: Filter to Open Division since xxxx
+filtered_data <- all_teams %>%
+  filter(Division == "Open", Year >= 1995)
+
+# Step 2: Count pairings (treat A-B and B-A as the same team)
+pair_counts <- filtered_data %>%
+  rowwise() %>%
+  mutate(
+    player_a = min(Player1, Player2),
+    player_b = max(Player1, Player2)
+  ) %>%
+  ungroup() %>%
+  count(player_a, player_b, name = "team_count")
+
+# Step 2.5: filter counts
+pair_counts_strong <- pair_counts %>%
+  filter(team_count >= 5)
+
+# Step 3: Build igraph object
+g <- graph_from_data_frame(pair_counts_strong, directed = FALSE)
+
+# Step 4: Basic visualization with igraph
+plot(g,
+     vertex.size = 5,
+     edge.width = E(g)$team_count,
+     vertex.label.cex = 0.8,
+     main = "DDC Open Division Player Network (Since 2010)")
+
+# Optional: fancier layout with ggraph
+tg <- as_tbl_graph(g)
+
+ggraph(tg, layout = "fr") +
+  geom_edge_link(aes(width = team_count), alpha = 0.3) +
+  geom_node_point(color = "tomato", size = 4) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3) +
+  scale_edge_width_continuous(
+    breaks = c(5, 10, 20, 40),
+    labels = c("5", "10", "20", "40"),
+    name = "Count"
+  ) +
+  labs(title = " DDC Open Division Player Network (1995–present, 5+ Pairings)") +
+  theme_void()
+```
+
+By decade
+```{r}
+library(dplyr)
+library(igraph)
+library(ggraph)
+library(tidygraph)
+library(RColorBrewer)
+
+# Define decade ranges and output folder
+decades <- list(
+  "1985-1994" = 1985:1994,
+  "1995–2004" = 1995:2004,
+  "2005–2014" = 2005:2014,
+  "2015–2024" = 2015:2024
+)
+
+# Create an output folder
+output_dir <- "data/output/ddc_decade_networks"
+dir.create(output_dir, showWarnings = FALSE)
+
+# Loop through decades and generate plots
+for (label in names(decades)) {
+  years <- decades[[label]]
+
+  df <- all_teams %>%
+    filter(Division == "Open", Year %in% years) %>%
+    rowwise() %>%
+    mutate(
+      player_a = min(Player1, Player2),
+      player_b = max(Player1, Player2)
+    ) %>%
+    ungroup() %>%
+    count(player_a, player_b, name = "team_count") %>%
+    filter(team_count >= 3)
+
+  if (nrow(df) == 0) {
+    message(paste("No data for", label, "- skipping"))
+    next
+  }
+
+  # Build graph
+  g <- graph_from_data_frame(df, directed = FALSE)
+  tg <- as_tbl_graph(g)
+  E(tg)$team_count <- df$team_count
+
+  # Save to PNG
+  file_name <- paste0(output_dir, "/ddc_network_", gsub("–", "-", label), ".png")
+  png(file_name, width = 1200, height = 900, res = 150)
+
+print(
+  ggraph(tg, layout = "fr") +
+    geom_edge_link(aes(width = team_count), color = "gray", alpha = 0.35, show.legend = FALSE) +
+    geom_node_point(color = "tomato", size = 3) +
+    geom_node_text(aes(label = name), repel = TRUE, size = 2.8) +
+    scale_edge_width_continuous(
+      breaks = c(5, 10, 20, 40),
+      labels = c("5", "10", "20", "40"),
+      name = "Count"
+    ) +
+#    labs(title = paste(" DDC Open Division Partner Network (3+ Pairings)", label)) +
+    theme_void()
+)
+
+  dev.off()
+  message("Saved ", file_name)
+}
+
+```
+
+Combine images
+```{r}
+library(magick)
+
+# Helper: read, add border, add title
+process_image <- function(path, title, border_color = "gray", border_size = "5x5") {
+  image_read(path) %>%
+    image_border(border_color, border_size) %>%
+    image_annotate(
+      title,
+      size = 40,
+      location = "+15+15",
+      gravity = "northwest",
+      color = "gray",
+      font = "Arial",
+      weight = 700
+    )
+}
+
+# Step 1: Load and process each image
+img1 <- process_image("data/output/ddc_decade_networks/ddc_network_1985-1994.png", "1985–1994")
+img2 <- process_image("data/output/ddc_decade_networks/ddc_network_1995-2004.png", "1995–2004")
+img3 <- process_image("data/output/ddc_decade_networks/ddc_network_2005-2014.png", "2005–2014")
+img4 <- process_image("data/output/ddc_decade_networks/ddc_network_2015-2024.png", "2015–2024")
+
+# Step 2: Append into 2 rows
+row1 <- image_append(c(img1, img2))
+row2 <- image_append(c(img3, img4))
+
+# Step 3: Stack vertically for 2 × 2 grid
+final_image <- image_append(c(row1, row2), stack = TRUE)
+
+# Step 4: Create a title banner image
+title_banner <- image_blank(
+  width = image_info(final_image)$width,
+  height = 100,
+  color = "white"
+) %>%
+  image_annotate(
+    "DDC Open Division Player Networks by Decade (3+ Pairings)",
+    size = 50,
+    gravity = "center",
+    color = "black",
+    font = "Arial",
+    weight = 700
+  )
+
+# Step 5: Stack title + grid
+full_layout <- image_append(c(title_banner, final_image), stack = TRUE)
+
+# Step 6: Save final image
+image_write(full_layout, path = "data/output/ddc_decade_networks/ddc_networks_2x2_full_title.png", format = "png")
+```
+
+
+```{r}
+install.packages("magick")
+library(magick)
+
+img1 <- image_read("data/output/ddc_decade_networks/ddc_network_1985-1994.png")
+img2 <- image_read("data/output/ddc_decade_networks/ddc_network_1995-2004.png")
+img3 <- image_read("data/output/ddc_decade_networks/ddc_network_2005-2014.png")
+img4 <- image_read("data/output/ddc_decade_networks/ddc_network_2015-2024.png")
+
+# First row: 1985–1994 and 1995–2004
+row1 <- image_append(c(img1, img2))
+
+# Second row: 2005–2014 and 2015–2024
+row2 <- image_append(c(img3, img4))
+
+# Stack rows vertically
+final_image <- image_append(c(row1, row2), stack = TRUE)
+image_write(final_image, path = "data/output/ddc_decade_networks/ddc_network_2x2.png", format = "png")
+```
 
