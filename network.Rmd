@@ -346,3 +346,273 @@ final_image <- image_append(c(row1, row2), stack = TRUE)
 image_write(final_image, path = "data/output/ddc_decade_networks/ddc_network_2x2.png", format = "png")
 ```
 
+Ego-centric network
+```{r}
+library(dplyr)
+library(igraph)
+library(ggraph)
+library(tidygraph)
+
+# Set your target player
+target_player <- "Jim Elsner"
+
+# Filter all pairings involving the player
+ego_pairs <- all_teams %>%
+  filter(Division == "Open") %>%
+  filter(Player1 == target_player | Player2 == target_player) %>%
+  mutate(
+    teammate = ifelse(Player1 == target_player, Player2, Player1)
+  ) %>%
+  count(teammate, name = "team_count")
+
+# Build edge list (target → teammate)
+edges <- data.frame(
+  from = target_player,
+  to = ego_pairs$teammate,
+  weight = ego_pairs$team_count
+)
+
+# Build graph
+g <- graph_from_data_frame(edges, directed = FALSE)
+tg <- as_tbl_graph(g)
+
+# Plot
+ggraph(tg, layout = "star", center = target_player) +
+  geom_edge_link(aes(width = weight), color = "gray30", alpha = 0.7) +
+  geom_node_point(size = 5, color = ifelse(V(g)$name == target_player, "tomato", "steelblue")) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 4) +
+  scale_edge_width_continuous(
+    breaks = c(1, 3, 5, 10),
+    labels = c("1", "3", "5", "10"),
+    name = "Teamings"
+  ) +
+  labs(title = paste("Ego Network for", target_player)) +
+  theme_void()
+```
+
+Two-layer ego-centric network
+```{r}
+library(dplyr)
+library(igraph)
+library(ggraph)
+library(tidygraph)
+
+# Ego
+target_player <- "Diana Elsner"
+
+# Base pairings (deduplicated)
+ddc_pairs <- all_teams %>%
+#  filter(Division == "Open") %>%
+  mutate(
+    player_a = pmin(Player1, Player2),
+    player_b = pmax(Player1, Player2)
+  ) %>%
+  distinct(player_a, player_b)
+
+# Step 1: Ego's direct teammates
+ego_edges <- ddc_pairs %>%
+  filter(player_a == target_player | player_b == target_player) %>%
+  mutate(teammate = ifelse(player_a == target_player, player_b, player_a))
+
+teammates <- unique(ego_edges$teammate)
+
+# Step 2: All pairings where BOTH players are in teammates list (i.e. teammate-to-teammate or teammate-to-others)
+second_level_edges <- ddc_pairs %>%
+  filter(player_a %in% teammates | player_b %in% teammates) %>%
+  filter(player_a != target_player & player_b != target_player)
+
+# Step 3: Combine ego links and second-degree links
+all_edges <- bind_rows(
+  ego_edges %>% select(from = player_a, to = player_b),
+  second_level_edges %>% rename(from = player_a, to = player_b)
+) %>%
+  filter(!is.na(from), !is.na(to))
+
+# Step 4: Build and plot
+g <- graph_from_data_frame(all_edges, directed = FALSE)
+tg <- as_tbl_graph(g)
+
+ggraph(tg, layout = "fr") +
+  geom_edge_link(color = "gray70", alpha = 0.6) +
+  geom_node_point(aes(color = name == target_player), size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3) +
+  scale_color_manual(values = c("steelblue", "tomato"), guide = "none") +
+  labs(title = paste("2-Level Ego Network for", target_player)) +
+  theme_void()
+
+```
+
+Partnership “reach” hierarchy for each player
+```{r}
+library(dplyr)
+library(igraph)
+library(tidygraph)
+
+# STEP 1: Build full player network
+pair_df <- all_teams %>%
+  filter(Division == "Open") %>%
+  mutate(
+    player_a = pmin(Player1, Player2),
+    player_b = pmax(Player1, Player2)
+  ) %>%
+  distinct(player_a, player_b)
+
+# Create undirected graph
+g <- graph_from_data_frame(pair_df, directed = FALSE)
+tg <- as_tbl_graph(g)
+
+# STEP 2: For each player, compute 1st, 2nd, 3rd-level neighbors
+all_players <- sort(unique(c(pair_df$player_a, pair_df$player_b)))
+
+# Function to compute levels
+get_partner_levels <- function(player_name) {
+  ego_id <- which(V(g)$name == player_name)
+  if (length(ego_id) == 0) return(NULL)
+
+  # Level 1 (direct teammates)
+  n1 <- ego(g, order = 1, nodes = ego_id, mode = "all")[[1]] %>% as_ids()
+  
+  # Level 2 (partners of direct teammates)
+  n2 <- ego(g, order = 2, nodes = ego_id, mode = "all")[[1]] %>% as_ids()
+  n2 <- setdiff(n2, c(player_name, n1))
+
+  # Level 3 (partners of 2nd-level players)
+  n3 <- ego(g, order = 3, nodes = ego_id, mode = "all")[[1]] %>% as_ids()
+  n3 <- setdiff(n3, c(player_name, n1, n2))
+
+  data.frame(
+    Player = player_name,
+    FirstLevel = length(n1),
+    SecondLevel = length(n2),
+    ThirdLevel = length(n3)
+  )
+}
+
+# STEP 3: Apply to all players
+partner_levels_df <- do.call(rbind, lapply(all_players, get_partner_levels))
+
+# STEP 4: Sort by number of first-level partners
+partner_levels_df <- partner_levels_df %>%
+  arrange(desc(FirstLevel))
+
+# View the result
+head(partner_levels_df)
+```
+
+Make the ego graph a Shiny app
+```{r}
+library(shiny)
+library(igraph)
+library(ggraph)
+library(tidygraph)
+library(dplyr)
+
+# Load DDC data
+ddc_data <- read.csv("data/output/ddc_team_data.csv", stringsAsFactors = FALSE)
+
+# UI
+ui <- fluidPage(
+  titlePanel("Double Disc Court Network (ego) Viewer"),
+
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("division", "Division:", choices = c("Any", "Open", "Women"), selected = "Open"),
+      sliderInput("year_range", "Year range:",
+                  min = min(ddc_data$Year, na.rm = TRUE),
+                  max = max(ddc_data$Year, na.rm = TRUE),
+                  value = c(2010, 2024), sep = "", step = 1),
+      selectInput("player", "Select a player:", choices = NULL),
+      numericInput("level", "Network depth (1 = teammates only, 2 = teammates-of-teammates):",
+                   value = 2, min = 1, max = 3)
+    ),
+
+    mainPanel(
+      plotOutput("egoPlot", height = "700px")
+    )
+  )
+)
+
+# SERVER
+server <- function(input, output, session) {
+
+  # Reactive: Filter data by division and year
+  filtered_data <- reactive({
+    df <- ddc_data %>%
+      filter(Year >= input$year_range[1], Year <= input$year_range[2])
+
+    if (input$division != "Any") {
+      df <- df %>% filter(Division == input$division)
+    }
+
+    df
+  })
+
+  # Reactive: update player list based on filtered data
+  observe({
+  players <- sort(unique(c(filtered_data()$Player1, filtered_data()$Player2)))
+  current <- input$player
+  if (!is.null(current) && current %in% players) {
+    selected <- current
+  } else {
+    selected <- players[1]
+  }
+  updateSelectInput(session, "player", choices = players, selected = selected)
+})
+
+  # Reactive: Build graph
+  graph_data <- reactive({
+    df <- filtered_data()
+
+    df %>%
+      mutate(
+        player_a = pmin(Player1, Player2),
+        player_b = pmax(Player1, Player2)
+      ) %>%
+      distinct(player_a, player_b)
+  })
+
+  g <- reactive({
+    graph_from_data_frame(graph_data(), directed = FALSE)
+  })
+
+  output$egoPlot <- renderPlot({
+    req(input$player)
+    net <- g()
+    ego_id <- which(V(net)$name == input$player)
+
+    if (length(ego_id) == 0) return(NULL)
+
+    # Ego network subgraph
+    sub_nodes <- ego(net, order = input$level, nodes = ego_id, mode = "all")[[1]]
+    subg <- induced_subgraph(net, vids = sub_nodes)
+    tg <- as_tbl_graph(subg)
+
+    # Plot
+    ggraph(tg, layout = "fr") +
+      geom_edge_link(color = "gray70", alpha = 0.6) +
+      geom_node_point(aes(color = name == input$player), size = 5) +
+      geom_node_text(aes(label = name), repel = TRUE, size = 3) +
+      scale_color_manual(values = c("steelblue", "tomato"), guide = "none") +
+      labs(title = paste("Ego Network for", input$player)) +
+      theme_void()
+  })
+}
+
+# Run the app
+shinyApp(ui = ui, server = server)
+```
+
+Deploy it
+```{r}
+install.packages("rsconnect")
+
+library(rsconnect)
+
+rsconnect::setAccountInfo(name='jameselsner',
+			  token='C715F8CF8311C0BE753AC0545FA37D56',
+			  secret='gkgAYlb5SCVKZDIaQb4VG3Vr/23xQOXp8urmMaRj')
+
+```
+
+
+
