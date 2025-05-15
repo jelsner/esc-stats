@@ -602,6 +602,8 @@ server <- function(input, output, session) {
 shinyApp(ui = ui, server = server)
 ```
 
+Once this successfully runs locally then try to deploy it. Copy the entire code chunk to a file called app.R. Put that file in a separate directory. Put your data in that same directory. Change the read.csv() function to point to this new directory.
+
 Deploy it
 ```{r}
 install.packages("rsconnect")
@@ -611,6 +613,8 @@ library(rsconnect)
 rsconnect::setAccountInfo(name='jameselsner',
 			  token='C715F8CF8311C0BE753AC0545FA37D56',
 			  secret='gkgAYlb5SCVKZDIaQb4VG3Vr/23xQOXp8urmMaRj')
+
+
 
 ```
 

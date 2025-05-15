@@ -45,17 +45,23 @@ server <- function(input, output, session) {
   })
   
   # Reactive: update player list based on filtered data
+  
   observe({
     players <- sort(unique(c(filtered_data()$Player1, filtered_data()$Player2)))
     current <- input$player
-    if (!is.null(current) && current %in% players) {
-      selected <- current
+    default <- "Jim Elsner"
+    
+    selected <- if (!is.null(current) && current %in% players) {
+      current
+    } else if (default %in% players) {
+      default
     } else {
-      selected <- players[1]
+      players[1]
     }
+    
     updateSelectInput(session, "player", choices = players, selected = selected)
   })
-  
+ 
   # Reactive: Build graph
   graph_data <- reactive({
     df <- filtered_data()
@@ -94,3 +100,7 @@ server <- function(input, output, session) {
       theme_void()
   })
 }
+
+# Run the app
+shinyApp(ui = ui, server = server)
+
