@@ -151,7 +151,7 @@ print(head(all_teams))
 
 ```
 
-Code to create a plot the network graph
+Code to create and plot the network graph
 ```{r}
 library(dplyr)
 library(igraph)
@@ -201,6 +201,8 @@ ggraph(tg, layout = "fr") +
   labs(title = " DDC Open Division Player Network (1995–present, 5+ Pairings)") +
   theme_void()
 ```
+
+
 
 By decade
 ```{r}

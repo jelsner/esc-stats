@@ -14,6 +14,7 @@ ui <- fluidPage(
   sidebarLayout(
     sidebarPanel(
       selectInput("division", "Division:", choices = c("Any", "Open", "Women"), selected = "Open"),
+      helpText("Only players active in the selected year range and division will appear."),
       sliderInput("year_range", "Year range:",
                   min = min(ddc_data$Year, na.rm = TRUE),
                   max = max(ddc_data$Year, na.rm = TRUE),
