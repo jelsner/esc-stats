@@ -160,7 +160,7 @@ library(tidygraph)
 
 # Step 1: Filter to Open Division since xxxx
 filtered_data <- all_teams %>%
-  filter(Division == "Open", Year >= 1995)
+  filter(Division == "Open", Year >= 2020, Place %in% c("1", "2", "3"))
 
 # Step 2: Count pairings (treat A-B and B-A as the same team)
 pair_counts <- filtered_data %>%
@@ -174,31 +174,78 @@ pair_counts <- filtered_data %>%
 
 # Step 2.5: filter counts
 pair_counts_strong <- pair_counts %>%
-  filter(team_count >= 5)
+  filter(team_count >= 1)
 
 # Step 3: Build igraph object
 g <- graph_from_data_frame(pair_counts_strong, directed = FALSE)
-
-# Step 4: Basic visualization with igraph
-plot(g,
-     vertex.size = 5,
-     edge.width = E(g)$team_count,
-     vertex.label.cex = 0.8,
-     main = "DDC Open Division Player Network (Since 2010)")
-
-# Optional: fancier layout with ggraph
 tg <- as_tbl_graph(g)
 
 ggraph(tg, layout = "fr") +
-  geom_edge_link(aes(width = team_count), alpha = 0.3) +
+#  geom_edge_link(aes(width = team_count), alpha = 0.3) +
+  geom_edge_link(alpha = 0.3) +
   geom_node_point(color = "tomato", size = 4) +
   geom_node_text(aes(label = name), repel = TRUE, size = 3) +
-  scale_edge_width_continuous(
-    breaks = c(5, 10, 20, 40),
-    labels = c("5", "10", "20", "40"),
-    name = "Count"
-  ) +
-  labs(title = " DDC Open Division Player Network (1995–present, 5+ Pairings)") +
+#  scale_edge_width_continuous(
+#    breaks = c(5, 10, 20, 40),
+#    labels = c("5", "10", "20", "40"),
+#    name = "Count"
+#  ) +
+  labs(title = " DDC Open Division Player Network (1995–present, Winning Teams)") +
+  theme_void()
+```
+
+Extract and sort node metrics
+```{r}
+library(igraph)
+library(dplyr)
+
+# Assume g is your undirected graph of player pairings
+# Each node = player
+
+# Compute metrics
+node_df <- data.frame(
+  Player = V(g)$name,
+  Degree = degree(g),
+  Betweenness = betweenness(g, normalized = TRUE)
+)
+
+# Sort by Degree descending
+node_df_sorted <- node_df %>%
+  arrange(desc(Degree))
+
+# View the top
+head(node_df_sorted)
+```
+
+What is Betweenness Centrality? Betweenness centrality measures:
+
+How often a player lies on the shortest path between other players. In simpler terms: A player with high betweenness is a bridge connecting different parts of the network. They may not have the most teammates, but they connect teammate groups that otherwise wouldn’t be connected.
+
+Let’s say Jim Elsner played with people in both the Wisconsin and Florida DDC scenes. Those two groups don’t team with each other often. Jim will lie on the shortest path between many Wisconsin–Florida player pairs. Result: High betweenness
+
+Unnormalized betweenness is the raw count of how many shortest paths a node lies on. Normalized betweenness divides this count by the maximum possible number of shortest paths a node could be on — making the value:
+So in the DDC network: A normalized betweenness of 0.15 means the player is on 15% of all shortest paths between other players (after adjusting for network size)
+
+Why Normalize?
+Makes betweenness scores comparable across networks/ Helpful if you're looking at decade-based subgraphs or player subsets
+
+Why it Matters in DDC: Players with high normalized betweenness: Often serve as connectors between regions or generations. May have been mentors, organizers, or simply active in multiple scenes/ Might not have the most direct partners (degree), but they’re strategic hubs
+
+```{r}
+library(ggraph)
+library(tidygraph)
+library(igraph)
+# Add normalized betweenness as a node attribute
+tg <- tg %>%
+  mutate(Betweenness = centrality_betweenness(normalized = TRUE))
+
+# Plot
+ggraph(tg, layout = "fr") +
+  geom_edge_link(color = "gray70", alpha = 0.6) +
+  geom_node_point(aes(size = Betweenness), color = "steelblue", alpha = 0.8) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3) +
+  scale_size_continuous(range = c(2, 12), name = "Betweenness") +
+  labs(title = "DDC Player Network\nNode Size = Betweenness Centrality") +
   theme_void()
 ```
 
