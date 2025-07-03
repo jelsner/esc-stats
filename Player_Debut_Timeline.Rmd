@@ -1,0 +1,44 @@
+---
+title: "Player Debut Timeline"
+output: html_document
+date: "2025-07-03"
+---
+
+Given  `all_tournaments_df`, here’s what we’ll do:
+
+1. Reshape the data from wide to long so Player1 and Player2 are combined in a single Player column.
+2. Filter out any NA players (important for solo tournaments that might only list Player1).
+3. Keep only data from 1977 on.
+4. Find the first year each player appeared.
+5. Sort by year and player name, and assign an ordinal count.
+
+```{r}
+all_tournaments_df <- read_csv(here::here("data", "output", "ddc_full_tournament_data_auto.csv"))
+```
+
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+
+# Build player debut data
+player_debuts <- all_tournaments_df %>%
+  filter(Year >= 1977) %>%
+  select(Year, Player1, Player2) %>%
+  pivot_longer(cols = c(Player1, Player2), names_to = "Role", values_to = "Player") %>%
+  filter(!is.na(Player)) %>%
+  group_by(Player) %>%
+  summarise(FirstYear = min(Year)) %>%
+  arrange(FirstYear, Player) %>%
+  mutate(Count = row_number())
+
+# Now expand this out into a timeline by player debut year
+timeline_df <- player_debuts %>%
+  select(Year = FirstYear, Player, Count)
+
+# View the result
+print(timeline_df)
+
+```
+
