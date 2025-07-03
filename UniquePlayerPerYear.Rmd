@@ -30,7 +30,7 @@ print(missing_players)
 # Calculate unique players by year
 player_counts <- ddc_data %>%
   filter(Division == "Open") %>%
-  filter(Level == "A") %>%
+  filter(Level == "A" | Level == "B" | Level == "C") %>%
   filter(!is.na(Year)) %>%   # <-- exclude rows without Year
   select(Year, Player1, Player2) %>%
   pivot_longer(cols = c(Player1, Player2), names_to = "PlayerRole", values_to = "Player") %>%
