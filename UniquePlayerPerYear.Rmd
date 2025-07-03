@@ -1,0 +1,52 @@
+---
+title: "Number of unique players per year"
+output: html_document
+date: "2025-07-02"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(tidyr)
+
+# Load your data
+ddc_data <- read_csv(here::here("data", "output", "ddc_full_tournament_data_auto.csv"))
+
+missing_players <- ddc_data %>%
+  filter(is.na(Player1) | is.na(Player2))
+
+# Print summary
+cat("Number of rows with missing players:", nrow(missing_players), "\n\n")
+
+ddc_data %>%
+  filter(is.na(Year))
+
+# Show the problematic rows
+print(missing_players)
+
+# Calculate unique players by year
+player_counts <- ddc_data %>%
+  filter(Division == "Open") %>%
+  filter(Level == "A") %>%
+  filter(!is.na(Year)) %>%   # <-- exclude rows without Year
+  select(Year, Player1, Player2) %>%
+  pivot_longer(cols = c(Player1, Player2), names_to = "PlayerRole", values_to = "Player") %>%
+  filter(!is.na(Player)) %>%
+  distinct(Year, Player) %>%
+  count(Year, name = "UniquePlayers")
+
+# Plot
+ggplot(player_counts, aes(x = Year, y = UniquePlayers)) +
+  geom_line(color = "steelblue", linewidth = 1.2) +
+  geom_point(color = "tomato", size = 2) +
+  labs(
+    title = "Number of Unique Tournament Players per Year",
+    x = "Year",
+    y = "Unique Players"
+  ) +
+  theme_minimal()
+
+```

@@ -1,0 +1,137 @@
+---
+title: "Scraper"
+output: html_document
+date: "2025-07-02"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(purrr)
+library(dplyr)
+library(stringr)
+library(rvest)
+library(chromote)
+
+scrape_ddc_event <- function(id) {
+  print(id)
+  url <- paste0("https://doubledisccourt.com/results/tournament.html?id=", id)
+  b <- ChromoteSession$new()
+  b$Page$navigate(url)
+  Sys.sleep(5)
+
+  html_doc <- b$DOM$getDocument()
+  source <- b$DOM$getOuterHTML(nodeId = html_doc$root$nodeId)[["outerHTML"]]
+  b$close()
+
+  page <- read_html(source)
+
+  # Extract global tournament attributes
+  title_text <- page %>% html_node("title") %>% html_text()
+  year_match <- str_extract(title_text, "\\b(19|20)\\d{2}\\b")
+  event_year <- ifelse(is.na(year_match), NA, as.integer(year_match))
+  tournament_name <- str_trim(title_text)
+
+  # Get tournament level (A/B/C/D) from description
+  description_text <- page %>% html_nodes("div.description") %>% html_text()
+  level_match <- str_extract(description_text, "(?<=Tournament level: )([A-D])")
+  tournament_level <- level_match[!is.na(level_match)][1]
+  if (length(tournament_level) == 0) tournament_level <- NA
+
+
+  # Determine format
+  page_text <- page %>% html_text()
+  if (grepl("King of the Court|Monarch of the Court|Solo format", page_text, ignore.case = TRUE)) {
+    format_type <- "King of the Court"
+  } else {
+    format_type <- "Standard Doubles"
+  }
+
+  # Now process each division
+  headers <- page %>% html_nodes("div.header")
+  result_lists <- page %>% html_nodes("ul.form")
+
+  if (length(headers) == 0 || length(headers) != length(result_lists)) return(NULL)
+
+  all_divisions <- list()
+
+  for (i in seq_along(headers)) {
+    div_name <- headers[i] %>% html_text(trim = TRUE)
+    teams <- result_lists[[i]] %>% html_nodes("li")
+    if (length(teams) < 2) next
+
+    team_data <- lapply(teams[-1], function(team) {
+      cells <- team %>% html_nodes("div.dataCell")
+      if (length(cells) >= 2) {
+        place <- cells[1] %>% html_text(trim = TRUE)
+        names <- cells[2] %>% html_nodes("a") %>% html_text(trim = TRUE)
+
+        # Always build a row, whether it's King style or team
+        return(data.frame(
+          Year = event_year,
+          TournamentName = tournament_name,
+          Level = tournament_level,
+          Format = format_type,
+          Division = div_name,
+          Place = place,
+          Player1 = names[1],
+          Player2 = ifelse(length(names) == 2, names[2], NA),
+          TournamentID = id,
+          stringsAsFactors = FALSE
+        ))
+      }
+      return(NULL)
+    })
+
+    all_divisions[[i]] <- bind_rows(team_data)
+  }
+
+  df <- bind_rows(all_divisions)
+  if (nrow(df) == 0) return(NULL)
+  return(df)
+}
+
+```
+
+```{r}
+# Set up
+all_tournaments <- list()
+consecutive_empty <- 0
+max_empty <- 10
+current_id <- 1
+
+while (consecutive_empty < max_empty) {
+  df <- tryCatch(scrape_ddc_event(current_id), error = function(e) NULL)
+
+  if (!is.null(df)) {
+    all_tournaments[[length(all_tournaments) + 1]] <- df
+    consecutive_empty <- 0
+  } else {
+    consecutive_empty <- consecutive_empty + 1
+  }
+
+  current_id <- current_id + 1
+}
+
+# Combine results
+all_tournaments_df <- bind_rows(all_tournaments)
+
+# Save to CSV
+write.csv(all_tournaments_df, "data/output/ddc_full_tournament_data_auto.csv", row.names = FALSE)
+
+# Show summary
+print(head(all_tournaments_df))
+
+```
+
+
+```{r}
+event_ids <- 1:624
+all_tournaments <- map_dfr(event_ids, possibly(scrape_ddc_event, NULL))
+
+# Save to CSV
+write.csv(all_tournaments, "data/output/ddc_full_tournament_data.csv", row.names = FALSE)
+
+# View sample
+head(all_tournaments)
+```
