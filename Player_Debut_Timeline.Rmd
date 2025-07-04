@@ -2,6 +2,8 @@
 title: "Player Debut Timeline"
 output: html_document
 date: "2025-07-03"
+editor_options: 
+  chunk_output_type: console
 ---
 
 Given  `all_tournaments_df`, here’s what we’ll do:
@@ -16,29 +18,148 @@ Given  `all_tournaments_df`, here’s what we’ll do:
 all_tournaments_df <- read_csv(here::here("data", "output", "ddc_full_tournament_data_auto.csv"))
 ```
 
-
-
 ```{r}
 library(dplyr)
 library(tidyr)
 
 # Build player debut data
 player_debuts <- all_tournaments_df %>%
+#  filter(Location == "Tallahassee") %>%
   filter(Year >= 1977) %>%
-  select(Year, Player1, Player2) %>%
+  select(EventStartDate, Player1, Player2, Location) %>%
   pivot_longer(cols = c(Player1, Player2), names_to = "Role", values_to = "Player") %>%
   filter(!is.na(Player)) %>%
   group_by(Player) %>%
-  summarise(FirstYear = min(Year)) %>%
-  arrange(FirstYear, Player) %>%
+  summarise(FirstDate = min(EventStartDate),
+            Location = first(Location)) %>%
+  arrange(FirstDate, Player) %>%
   mutate(Count = row_number())
 
 # Now expand this out into a timeline by player debut year
 timeline_df <- player_debuts %>%
-  select(Year = FirstYear, Player, Count)
+  select(Date = FirstDate, Player, Count, Location)
 
 # View the result
 print(timeline_df)
+```
+
+Plots
+```{r}
+library(ggplot2)
+
+ggplot(timeline_df, aes(x = Date, y = Count)) +
+  geom_line(color = "steelblue", linewidth = 1.2) +
+  geom_point(color = "tomato", size = 2) +
+  labs(
+    title = "Cumulative Number of New DDC Tournament Players Over Time",
+    x = "Year",
+    y = "Cumulative Players",
+    caption = "Data from https://doubledisccourt.com/results/rankings.html"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Compute new players each year
+growth_df <- cumulative_per_year %>%
+  mutate(NewThisYear = CumulativePlayers - lag(CumulativePlayers, default = 0))
+
+# Find top 5 rapid growth years
+top_growth_years <- growth_df %>%
+  arrange(desc(NewThisYear)) %>%
+  slice_head(n = 5)
+
+# Plot with highlights
+ggplot(cumulative_per_year, aes(x = Year, y = CumulativePlayers)) +
+  geom_line(color = "steelblue", linewidth = 1.2) +
+  geom_point(color = "tomato", size = 2) +
+  # Highlight top growth years
+  geom_vline(
+    data = top_growth_years,
+    aes(xintercept = Year),
+    linetype = "dashed", color = "gray50"
+  ) +
+  geom_text(
+    data = top_growth_years,
+    aes(x = Year, y = CumulativePlayers, label = paste0("+", NewThisYear, " players")),
+    vjust = -1,
+    color = "darkgreen",
+    size = 3
+  ) +
+  labs(
+    title = "Cumulative Number of Unique DDC Tournament Players Over Time",
+    subtitle = "Dashed lines indicate years of rapid growth",
+    x = "Year",
+    y = "Cumulative Players",
+    caption = "Data from https://doubledisccourt.com/results/rankings.html"
+  ) +
+  theme_minimal()
 
 ```
+
+
+```{r}
+cumulative_per_year <- timeline_df %>%
+  group_by(Date) %>%
+  summarise(NewPlayers = n()) %>%
+  mutate(CumulativePlayers = cumsum(NewPlayers))
+
+ggplot(cumulative_per_year, aes(x = Date, y = CumulativePlayers)) +
+  geom_line(color = "steelblue", linewidth = 1.2) +
+  geom_point(color = "tomato", size = 2) +
+  labs(
+    title = "Cumulative Number of Unique Tournament Players Over Time",
+    x = "Year",
+    y = "Cumulative Players"
+  ) +
+  theme_minimal()
+
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Build milestone labels
+milestones <- timeline_df %>%
+  filter(Count %% 100 == 0)  # every 100th player
+
+# Build cumulative per year for easier annotation of the last point
+cumulative_per_year <- timeline_df %>%
+  group_by(Year) %>%
+  summarise(NewPlayers = n()) %>%
+  mutate(CumulativePlayers = cumsum(NewPlayers))
+
+# Last point (2025)
+last_point <- cumulative_per_year %>% filter(Year == max(Year))
+
+# Plot
+ggplot(cumulative_per_year, aes(x = Year, y = CumulativePlayers)) +
+  geom_line(color = "steelblue", linewidth = 1.2) +
+  geom_point(color = "tomato", size = 2) +
+  geom_text(
+    data = milestones,
+    aes(x = Year, y = Count, label = paste0("Player ", Count)),
+    vjust = -1,
+    size = 3
+  ) +
+  geom_text(
+    data = last_point,
+    aes(label = "2025 incomplete"),
+    vjust = -1.5,
+    color = "gray30",
+    size = 3.2
+  ) +
+  labs(
+    title = "Cumulative Number of Unique DDC Tournament Players Over Time",
+    x = "Year",
+    y = "Cumulative Players"
+  ) +
+  theme_minimal()
+
+```
+
 

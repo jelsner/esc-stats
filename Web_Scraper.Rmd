@@ -7,6 +7,103 @@ editor_options:
 ---
 
 ```{r}
+scrape_ddc_event <- function(id) {
+  print(id)
+  url <- paste0("https://doubledisccourt.com/results/tournament.html?id=", id)
+  b <- ChromoteSession$new()
+  b$Page$navigate(url)
+  Sys.sleep(5)
+
+  html_doc <- b$DOM$getDocument()
+  source <- b$DOM$getOuterHTML(nodeId = html_doc$root$nodeId)[["outerHTML"]]
+  b$close()
+
+  page <- read_html(source)
+
+  # Extract global tournament attributes
+  title_text <- page %>% html_node("title") %>% html_text()
+  year_match <- str_extract(title_text, "\\b(19|20)\\d{2}\\b")
+  event_year <- ifelse(is.na(year_match), NA, as.integer(year_match))
+  tournament_name <- str_trim(title_text)
+
+  # Get tournament level (A/B/C/D)
+  description_text <- page %>% html_nodes("div.description") %>% html_text()
+  level_match <- str_extract(description_text, "(?<=Tournament level: )([A-D])")
+  tournament_level <- level_match[!is.na(level_match)][1]
+  if (length(tournament_level) == 0) tournament_level <- NA
+
+  # Determine format
+  page_text <- page %>% html_text()
+  if (grepl("King of the Court|Monarch of the Court|Solo format", page_text, ignore.case = TRUE)) {
+    format_type <- "King of the Court"
+  } else {
+    format_type <- "Standard Doubles"
+  }
+
+  # Extract location and dates
+  location_text <- page %>% html_nodes("div.location") %>% html_text(trim = TRUE)
+
+  location_name <- str_trim(str_extract(location_text, "^[^,]+"))
+
+  date_matches <- str_extract_all(location_text, "[A-Za-z]+\\s+\\d{1,2}")[[1]]
+  event_start_date <- if (!is.na(event_year) & length(date_matches) >= 1)
+    as.Date(paste(date_matches[1], event_year), format = "%B %d %Y")
+  else NA
+  event_end_date <- if (!is.na(event_year) & length(date_matches) >= 2)
+    as.Date(paste(date_matches[2], event_year), format = "%B %d %Y")
+  else event_start_date
+
+  # Now process each division
+  headers <- page %>% html_nodes("div.header")
+  result_lists <- page %>% html_nodes("ul.form")
+
+  if (length(headers) == 0 || length(headers) != length(result_lists)) return(NULL)
+
+  all_divisions <- list()
+
+  for (i in seq_along(headers)) {
+    div_name <- headers[i] %>% html_text(trim = TRUE)
+    teams <- result_lists[[i]] %>% html_nodes("li")
+    if (length(teams) < 2) next
+
+    team_data <- lapply(teams[-1], function(team) {
+      cells <- team %>% html_nodes("div.dataCell")
+      if (length(cells) >= 2) {
+        place <- cells[1] %>% html_text(trim = TRUE)
+        names <- cells[2] %>% html_nodes("a") %>% html_text(trim = TRUE)
+
+        return(data.frame(
+          Year = event_year,
+          TournamentName = tournament_name,
+          Location = location_name,
+          EventStartDate = event_start_date,
+          EventEndDate = event_end_date,
+          Level = tournament_level,
+          Format = format_type,
+          Division = div_name,
+          Place = place,
+          Player1 = names[1],
+          Player2 = ifelse(length(names) == 2, names[2], NA),
+          TournamentID = id,
+          stringsAsFactors = FALSE
+        ))
+      }
+      return(NULL)
+    })
+
+    all_divisions[[i]] <- bind_rows(team_data)
+  }
+
+  df <- bind_rows(all_divisions)
+  if (nrow(df) == 0) return(NULL)
+  return(df)
+}
+
+```
+
+
+OLD
+```{r}
 library(purrr)
 library(dplyr)
 library(stringr)
