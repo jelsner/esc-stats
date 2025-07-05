@@ -59,107 +59,112 @@ ggplot(timeline_df, aes(x = Date, y = Count)) +
   theme_minimal()
 ```
 
+Number of events per player
 ```{r}
 library(dplyr)
-library(ggplot2)
+library(tidyr)
+library(stringr)
 
-# Compute new players each year
-growth_df <- cumulative_per_year %>%
-  mutate(NewThisYear = CumulativePlayers - lag(CumulativePlayers, default = 0))
+player_event_counts <- all_tournaments_df %>%
+  filter(!str_detect(tolower(TournamentName), "league")) %>%  # remove "league"
+  select(TournamentID, Player1, Player2) %>%
+  pivot_longer(cols = c(Player1, Player2), names_to = "Role", values_to = "Player") %>%
+  filter(!is.na(Player)) %>%
+  distinct(TournamentID, Player) %>%
+  count(Player, name = "NumEvents") %>%
+  arrange(desc(NumEvents))
 
-# Find top 5 rapid growth years
-top_growth_years <- growth_df %>%
-  arrange(desc(NewThisYear)) %>%
-  slice_head(n = 5)
-
-# Plot with highlights
-ggplot(cumulative_per_year, aes(x = Year, y = CumulativePlayers)) +
-  geom_line(color = "steelblue", linewidth = 1.2) +
-  geom_point(color = "tomato", size = 2) +
-  # Highlight top growth years
-  geom_vline(
-    data = top_growth_years,
-    aes(xintercept = Year),
-    linetype = "dashed", color = "gray50"
-  ) +
-  geom_text(
-    data = top_growth_years,
-    aes(x = Year, y = CumulativePlayers, label = paste0("+", NewThisYear, " players")),
-    vjust = -1,
-    color = "darkgreen",
-    size = 3
-  ) +
-  labs(
-    title = "Cumulative Number of Unique DDC Tournament Players Over Time",
-    subtitle = "Dashed lines indicate years of rapid growth",
-    x = "Year",
-    y = "Cumulative Players",
-    caption = "Data from https://doubledisccourt.com/results/rankings.html"
-  ) +
-  theme_minimal()
+# Show results
+print(player_event_counts)
 
 ```
 
-
+Number of events per team
 ```{r}
-cumulative_per_year <- timeline_df %>%
-  group_by(Date) %>%
-  summarise(NewPlayers = n()) %>%
-  mutate(CumulativePlayers = cumsum(NewPlayers))
+library(dplyr)
+library(stringr)
 
-ggplot(cumulative_per_year, aes(x = Date, y = CumulativePlayers)) +
-  geom_line(color = "steelblue", linewidth = 1.2) +
-  geom_point(color = "tomato", size = 2) +
-  labs(
-    title = "Cumulative Number of Unique Tournament Players Over Time",
-    x = "Year",
-    y = "Cumulative Players"
-  ) +
-  theme_minimal()
+team_counts <- all_tournaments_df %>%
+  filter(!str_detect(tolower(TournamentName), "league")) %>%  # exclude leagues
+  filter(!is.na(Player1) & !is.na(Player2)) %>%               # keep only proper teams
+  mutate(
+    player_a = pmin(Player1, Player2),  # order names alphabetically so (Jim, Mike) == (Mike, Jim)
+    player_b = pmax(Player1, Player2)
+  ) %>%
+  distinct(TournamentID, player_a, player_b) %>%              # ensure counted once per tournament
+  count(player_a, player_b, name = "NumEvents") %>%
+  arrange(desc(NumEvents))
+
+# View top pairs
+print(team_counts)
 
 ```
 
+Player partnership graph
 ```{r}
-library(ggplot2)
-library(dplyr)
+library(igraph)
+library(ggraph)
+library(tidygraph)
 
-# Build milestone labels
-milestones <- timeline_df %>%
-  filter(Count %% 100 == 0)  # every 100th player
+# Filter to strong partnerships
+strong_teams <- team_counts %>%
+  filter(NumEvents >= 8)
 
-# Build cumulative per year for easier annotation of the last point
-cumulative_per_year <- timeline_df %>%
-  group_by(Year) %>%
-  summarise(NewPlayers = n()) %>%
-  mutate(CumulativePlayers = cumsum(NewPlayers))
-
-# Last point (2025)
-last_point <- cumulative_per_year %>% filter(Year == max(Year))
+# Build graph
+g <- graph_from_data_frame(strong_teams, directed = FALSE)
 
 # Plot
-ggplot(cumulative_per_year, aes(x = Year, y = CumulativePlayers)) +
-  geom_line(color = "steelblue", linewidth = 1.2) +
-  geom_point(color = "tomato", size = 2) +
-  geom_text(
-    data = milestones,
-    aes(x = Year, y = Count, label = paste0("Player ", Count)),
-    vjust = -1,
-    size = 3
-  ) +
-  geom_text(
-    data = last_point,
-    aes(label = "2025 incomplete"),
-    vjust = -1.5,
-    color = "gray30",
-    size = 3.2
-  ) +
+ggraph(as_tbl_graph(g), layout = "fr") +
+  geom_edge_link(aes(width = NumEvents), color = "gray60", alpha = 0.6) +
+  geom_node_point(color = "tomato", size = 4) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3) +
+  scale_edge_width_continuous(range = c(0.5, 5)) +
   labs(
-    title = "Cumulative Number of Unique DDC Tournament Players Over Time",
-    x = "Year",
-    y = "Cumulative Players"
+    title = "DDC Strong Player Partnership Network",
+    subtitle = "Showing only partnerships with at least 8 tournaments together"
   ) +
-  theme_minimal()
+  theme_void()
 
 ```
+
+Color nodes by number of unique partners
+```{r}
+# Compute overall degree from full team_counts graph
+full_graph <- graph_from_data_frame(team_counts, directed = FALSE)
+full_degree <- degree(full_graph)
+full_degree_df <- data.frame(
+  Player = names(full_degree),
+  TotalPartners = as.numeric(full_degree)
+)
+
+# Filter to strong partnerships
+strong_teams <- team_counts %>%
+  filter(NumEvents >= 8)
+
+strong_graph <- graph_from_data_frame(strong_teams, directed = FALSE)
+
+library(tidygraph)
+
+tg_strong <- as_tbl_graph(strong_graph) %>%
+  left_join(full_degree_df, by = c("name" = "Player"))
+
+library(ggraph)
+
+ggraph(tg_strong, layout = "fr") +
+  geom_edge_link(aes(width = NumEvents), color = "gray70", alpha = 0.5) +
+  geom_node_point(aes(color = TotalPartners), size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3) +
+  scale_edge_width(range = c(0.5, 5)) +
+  scale_color_viridis_c(option = "plasma", name = "Total Unique Partners") +
+  labs(
+    title = "DDC Strong Player Partnership Network",
+    subtitle = "Node color reflects total unique partners across all tournaments"
+  ) +
+  theme_void()
+
+```
+
+
+
 
 

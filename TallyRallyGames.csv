@@ -1,0 +1,54 @@
+Year,Round,Team A Player 1,Team A Player 2,Team B Player 1,Team B Player 2,Score A,Score B
+2019,Round 1 Court 1,Conrad,John,Jordan,Jim G,16,5
+2019,Round 1 Court 1,Conrad,Jordan,John,Jim G,15,6
+2019,Round 1 Court 1,Conrad,Jim G,John,Jordan,10,15
+2019,Round 1 Court 2,Mike,Hank,JaSun,Beth,15,9
+2019,Round 1 Court 2,Mike,JaSun,Hank,Beth,15,8
+2019,Round 1 Court 2,Mike,Beth,Hank,JaSun,11,16
+2019,Round 1 Court 3,Harv,Jim E,Charles,Diana,15,3
+2019,Round 1 Court 3,Harv,Charles,Jim E,Diana,15,10
+2019,Round 1 Court 3,Harv,Diana,Jim E,Charles,9,15
+2019,Round 2 Court 1,Conrad,Mike,Jim E,Harv,15,6
+2019,Round 2 Court 1,Conrad,Jim E,Mike,Harv,15,6
+2019,Round 2 Court 1,Conrad,Harv,Mike,Jim E,12,15
+2019,Round 2 Court 2,JaSun,Jordan,Charles,Beth,15,12
+2019,Round 2 Court 2,JaSun,Charles,Jordan,Beth,15,11
+2019,Round 2 Court 2,JaSun,Beth,Jordan,Charles,10,15
+2019,Round 2 Court 3,John,Hank,Diana,Jim G,15,5
+2019,Round 2 Court 3,John,Diana,Hank,Jim G,13,15
+2019,Round 2 Court 3,John,Jim G,Hank,Diana,6,15
+2019,Round 3 Court 1,Conrad,Mike,Jordan,John,15,7
+2019,Round 3 Court 1,Conrad,Jordan,Mike,John,15,12
+2019,Round 3 Court 1,Conrad,John,Mike,Jordan,15,10
+2019,Round 3 Court 2,Jim E,Harv,Charles,Hank,15,13
+2019,Round 3 Court 2,Jim E,Charles,Harv,Hank,16,14
+2019,Round 3 Court 2,Jim E,Hank,Harv,Charles,15,9
+2019,Round 3 Court 3,JaSun,Diana,Beth,Jim G,15,4
+2019,Round 3 Court 3,JaSun,Beth,Diana,Jim G,16,6
+2019,Round 3 Court 3,JaSun,Jim G,Diana,Beth,17,16
+2019,Finals A Pool,Conrad,Mike,Jim E,Hank,15,5
+2019,Finals A Pool,Mike,Jim E,Hank,Harv,10,15
+2019,Finals A Pool,Conrad,Hank,Jim E,Harv,16,10
+2019,Finals A Pool,Conrad,Jim E,Mike,Harv,16,5
+2019,Finals A Pool,Conrad,Harv,Mike,Hank,15,10
+2019,Finals B Pool,Charles,John,Jordan,JaSun,9,15
+2019,Finals B Pool,John,Jordan,JaSun,Diana,7,15
+2019,Finals B Pool,Charles,JaSun,Jordan,Diana,15,11
+2019,Finals B Pool,Charles,Jordan,John,Diana,15,7
+2019,Finals B Pool,Charles,Diana,John,JaSun,10,16
+2019,Sun Round 1 Court 1,Conrad,Jim E,Mike,Jordan,11,6
+2019,Sun Round 1 Court 1,Jim E,Mike,Jordan,Craig,8,11
+2019,Sun Round 1 Court 1,Conrad,Jordan,Mike,Craig,11,8
+2019,Sun Round 1 Court 1,Conrad,Mike,Jim E,Craig,11,8
+2019,Sun Round 1 Court 1,Conrad,Craig,Jim E,Jordan,11,7
+2019,Sun Round 1 Court 2,Hank,Harv,JaSun,Charles,9,11
+2019,Sun Round 1 Court 2,Harv,JaSun,Charles,John,11,7
+2019,Sun Round 1 Court 2,Hank,Charles,JaSun,John,11,7
+2019,Sun Round 1 Court 2,Hank,JaSun,Harv,John,11,7
+2019,Sun Round 1 Court 2,Hank,John,Harv,Charles,11,6
+2019,Sun Round 2 Court 1,Conrad,Hank,Craig,Charles,9,11
+2019,Sun Round 2 Court 1,Conrad,Craig,Hank,Charles,11,7
+2019,Sun Round 2 Court 1,Conrad,Charles,Hank,Craig,12,10
+2019,Sun Round 2 Court 2,Jordan,Harv,Mike,John,7,11
+2019,Sun Round 2 Court 2,Jordan,Mike,Harv,John,10,12
+2019,Sun Round 2 Court 2,Harv,Mike,Jordan,John,13,11
