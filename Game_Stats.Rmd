@@ -226,3 +226,62 @@ ggplot(daily_summary, aes(x = Wind_Avg, y = Temp_Avg, z = Win_Percent)) +
 
 ```
 
+Prediction grid
+```{r}
+# Get reasonable ranges from your actual data
+wind_range <- seq(min(daily_summary$Wind_Avg), max(daily_summary$Wind_Avg), length.out = 50)
+temp_range <- seq(min(daily_summary$Temp_Avg), max(daily_summary$Temp_Avg), length.out = 50)
+
+# Build grid
+grid <- expand.grid(
+  Wind_Avg = wind_range,
+  Temp_Avg = temp_range
+)
+
+# Predict win percentage
+grid$Win_Percent_Pred <- predict(lm_win, newdata = grid)
+
+library(ggplot2)
+
+ggplot(grid, aes(x = Wind_Avg, y = Temp_Avg, z = Win_Percent_Pred)) +
+  geom_contour_filled(bins = 10) +
+  scale_fill_viridis_d(option = "plasma") +
+  labs(
+    title = "Predicted Win % for Jim Elsner",
+    x = "Average Wind Speed (mph)",
+    y = "Average Temperature (F)",
+    fill = "Pred Win %"
+  ) +
+  theme_minimal()
+```
+
+A head-to-head win count matrix, showing how many times each player has defeated each other player
+
+```{r}
+library(dplyr)
+library(tidyr)
+
+# Make long results with winner and loser columns
+game_results <- df_parsed %>%
+  mutate(
+    Winner1 = ifelse(`Score A` > `Score B` , `Team A Player 1`, `Team B Player 1`),
+    Winner2 = ifelse(`Score A` > `Score B`, `Team A Player 2`, `Team B Player 2`),
+    Loser1  = ifelse(`Score A` < `Score B`, `Team A Player 1`, `Team B Player 1`),
+    Loser2  = ifelse(`Score A` < `Score B`, `Team A Player 2`, `Team B Player 2`)
+  ) %>%
+  select(Winner1, Winner2, Loser1, Loser2)
+
+head_to_head_long <- game_results %>%
+  pivot_longer(cols = c(Winner1, Winner2), names_to = "WinnerPos", values_to = "Winner") %>%
+  pivot_longer(cols = c(Loser1, Loser2), names_to = "LoserPos", values_to = "Loser") %>%
+  filter(Winner != Loser)  # remove self-matches
+
+head_to_head_counts <- head_to_head_long %>%
+  group_by(Winner, Loser) %>%
+  summarise(Wins = n(), .groups = "drop")
+
+head_to_head_matrix <- head_to_head_counts %>%
+  pivot_wider(names_from = Loser, values_from = Wins, values_fill = 0)
+```
+
+
