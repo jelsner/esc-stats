@@ -1,0 +1,228 @@
+---
+title: "TallyRallyGames"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(readr)
+df <- read_csv(here::here("data", "TallyRallyGames.csv"))
+```
+
+```{r}
+library(dplyr)
+library(stringr)
+library(tidyr)
+
+df_parsed <- df %>%
+  mutate(
+    # Extract temperatures
+    Temp_Range = str_extract(Weather, "\\d+-\\d+\\s*F"),
+    Temp_Min = as.numeric(str_extract(Temp_Range, "^\\d+")),
+    Temp_Max = as.numeric(str_extract(Temp_Range, "(?<=-)\\d+")),
+    Temp_Single = as.numeric(str_extract(Weather, "(?<!-)\\b\\d+(?=\\s*F)")),
+
+    # If single temperature, use for both min & max
+    Temp_Min = coalesce(Temp_Min, Temp_Single),
+    Temp_Max = coalesce(Temp_Max, Temp_Single),
+    Temp_Avg = rowMeans(cbind(Temp_Min, Temp_Max), na.rm = TRUE),
+
+    # Extract wind direction (V is variable)
+    Wind_Dir = str_extract(Weather, "(?i)\\b(V|SW|SE|NW|NE|S|N|E|W|WNW|ENE|NNE|SSW)\\b"),
+    Wind_Dir = case_when(
+      Wind_Dir == "V" ~ "Variable",
+      TRUE ~ Wind_Dir
+    ),
+
+    # Extract main wind speed (range or single)
+    Wind_Range = str_extract(Weather, "\\d+-\\d+\\s*mph"),
+    Wind_Speed = as.numeric(str_extract(Wind_Range, "^\\d+")),
+    Wind_Max1 = as.numeric(str_extract(Wind_Range, "(?<=-)\\d+")),
+    Wind_Single = as.numeric(str_extract(Weather, "(?<!-)\\b\\d+(?=\\s*mph)")),
+
+    Wind_Speed = coalesce(Wind_Speed, Wind_Single),
+    Wind_Max = coalesce(Wind_Max1, Wind_Single),
+
+    # Extract Gust if it exists
+    Wind_Gust = as.numeric(str_extract(Weather, "(?<=G)\\d+")),
+
+    # Use gust as higher wind if present
+    Wind_Max = pmax(Wind_Max, Wind_Gust, na.rm = TRUE),
+    Wind_Avg = rowMeans(cbind(Wind_Speed, Wind_Max), na.rm = TRUE),
+
+    # Extract sky condition
+    Sky = str_extract(Weather, "(?i)(Sunny|Partly cloudy|Cloudy|Drizzle)"),
+    Sky = str_to_title(Sky)
+  ) %>%
+  select(
+    ID, Year, `Month Day`, Round,
+    `Team A Player 1`, `Team A Player 2`,
+    `Team B Player 1`, `Team B Player 2`,
+    `Score A`, `Score B`,
+    Location, Weather,
+    Temp_Min, Temp_Max, Temp_Avg,
+    Wind_Dir, Wind_Speed, Wind_Gust, Wind_Max, Wind_Avg,
+    Sky
+  )
+
+```
+
+```{r}
+library(dplyr)
+library(tidyr)
+
+# Ensure your scores are numeric
+df_parsed <- df_parsed %>%
+  mutate(
+    `Score A` = as.numeric(`Score A`),
+    `Score B` = as.numeric(`Score B`)
+  )
+
+# Pivot to long format for players
+player_games <- df_parsed %>%
+  pivot_longer(
+    cols = c(`Team A Player 1`, `Team A Player 2`, `Team B Player 1`, `Team B Player 2`),
+    names_to = "Player_Position",
+    values_to = "Player"
+  ) %>%
+  mutate(
+    Team = case_when(
+      Player_Position %in% c("Team A Player 1", "Team A Player 2") ~ "A",
+      Player_Position %in% c("Team B Player 1", "Team B Player 2") ~ "B"
+    ),
+    Won = case_when(
+      Team == "A" & `Score A` > `Score B` ~ 1,
+      Team == "B" & `Score B` > `Score A` ~ 1,
+      TRUE ~ 0
+    ),
+    Loss = case_when(
+      Team == "A" & `Score A` < `Score B` ~ 1,
+      Team == "B" & `Score B` < `Score A` ~ 1,
+      TRUE ~ 0
+    )
+  )
+
+# Add point differential for each player per game
+player_games <- player_games %>%
+  mutate(
+    Player_Point_Diff = case_when(
+      Team == "A" ~ `Score A` - `Score B`,
+      Team == "B" ~ `Score B` - `Score A`
+    )
+  )
+
+# Summarize with average point differential
+player_summary <- player_games %>%
+  group_by(Player) %>%
+  summarise(
+    Games = n(),
+    Wins = sum(Won, na.rm = TRUE),
+    Losses = sum(Loss, na.rm = TRUE),
+    Win_Pct = round(Wins / Games * 100, 1),
+    Avg_Point_Diff = round(mean(Player_Point_Diff, na.rm = TRUE), 2)
+  ) %>%
+  arrange(desc(Win_Pct))
+
+player_summary
+```
+
+Windy vs non-windy
+```{r}
+library(dplyr)
+library(tidyr)
+
+# First: classify each game as windy or not
+df_parsed <- df_parsed %>%
+  mutate(Windy = ifelse(Wind_Avg > 20, "Windy", "Calm"))
+
+# Pivot into long format
+player_games <- df_parsed %>%
+  pivot_longer(
+    cols = c(`Team A Player 1`, `Team A Player 2`, `Team B Player 1`, `Team B Player 2`),
+    names_to = "Player_Position",
+    values_to = "Player"
+  ) %>%
+  mutate(
+    Team = case_when(
+      Player_Position %in% c("Team A Player 1", "Team A Player 2") ~ "A",
+      Player_Position %in% c("Team B Player 1", "Team B Player 2") ~ "B"
+    ),
+    Won = case_when(
+      Team == "A" & `Score A` > `Score B` ~ 1,
+      Team == "B" & `Score B` > `Score A` ~ 1,
+      TRUE ~ 0
+    )
+  )
+
+# Get total games played
+player_totals <- player_games %>%
+  group_by(Player) %>%
+  summarise(Total_Games = n())
+
+# Now summarize by Player and Windy/Calm
+player_wind_summary <- player_games %>%
+  group_by(Player, Windy) %>%
+  summarise(
+    Games = n(),
+    Wins = sum(Won, na.rm = TRUE),
+    Win_Pct = round(100 * Wins / Games, 1)
+  ) %>%
+  left_join(player_totals, by = "Player") %>%
+  filter(Total_Games >= 50) %>%
+  select(Player, Total_Games, Windy, Games, Wins, Win_Pct) %>%
+  arrange(Player, desc(Windy))  # optional: sorts so Windy first for each player
+
+player_wind_summary
+
+```
+
+Win percentage per day
+```{r}
+library(dplyr)
+
+daily_summary <- player_games %>%
+  filter(Player == "Jim Elsner") %>%
+  group_by(`Month Day`, Wind_Avg, Temp_Avg) %>%
+  summarise(
+    Games = n(),
+    Wins = sum(Won),
+    Win_Percent = Wins / Games
+  ) %>%
+  arrange(`Month Day`)
+
+daily_summary
+
+library(ggplot2)
+ggplot(daily_summary, aes(x = Wind_Avg, y = Win_Percent)) +
+  geom_point(size=3) +
+  geom_smooth(method="lm", se=FALSE) +
+  labs(title = "Daily Win % vs Wind Speed",
+       x = "Average Wind Speed (mph)",
+       y = "Win Percentage")
+
+# Linear model
+lm_win <- lm(Win_Percent ~ Wind_Avg + Temp_Avg, data = daily_summary)
+
+# Summary output
+summary(lm_win)
+
+```
+
+```{r}
+library(ggplot2)
+
+ggplot(daily_summary, aes(x = Wind_Avg, y = Temp_Avg, z = Win_Percent)) +
+  geom_contour_filled(bins = 10) +
+  geom_point(aes(color = Win_Percent), size = 3) +
+  scale_fill_viridis_d(option = "plasma") +
+  labs(
+    title = "Jim Elsner's Win Percentage by Wind & Temperature",
+    x = "Average Wind Speed (mph)",
+    y = "Average Temperature (F)",
+    fill = "Win %"
+  ) +
+  theme_minimal()
+
+```
+
