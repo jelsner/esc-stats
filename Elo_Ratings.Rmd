@@ -1,0 +1,419 @@
+---
+title: "Elo Ratings"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+Elo ratings: Why is it powerful? It automatically adjusts for strength of opponent: beating top players moves you up fast, beating weak players not much. Gives you a single number to rank players or teams, but it implicitly accounts for all games played. Great for dynamic tracking: you can plot Elo vs time to see if someone’s getting better or declining.
+
+The **Elo rating system** is a way to estimate the skill levels of players in competitive games.
+
+It was invented by **Arpad Elo**, a Hungarian-American physics professor and chess master.\
+The system became widely used in chess, but is now used for many sports and games, including online gaming and even evaluating football teams.
+
+The system works like this:
+
+-   Each player starts with an initial rating (commonly 1500).
+-   When two players (or teams) play a match:
+    -   The expected outcome is calculated based on the difference in their ratings.
+    -   If a player performs better than expected (wins against a stronger opponent), they gain more points.
+    -   If a player performs worse than expected (loses to a weaker opponent), they lose more points.
+-   The **K-factor** controls how much the ratings adjust after each game.
+
+The expected score (probability of winning) is:
+
+$$
+E_A = \frac{1}{1 + 10^{(R_B - R_A) / 400}}
+$$
+
+where: - $R_A$ is Player A’s rating - $R_B$ is Player B’s rating
+
+Then after the match:
+
+$$
+R'_A = R_A + K \times (S_A - E_A)
+$$
+
+where: $S_A = 1$ if A wins, $0.5$ if draw, $0$ if A loses and $K$ is the adjustment factor (commonly 32).
+
+✅ It’s **self-correcting**:\
+If a player wins consistently, their rating rises, so future wins give less of a boost (and losses hurt more).
+
+✅ It’s **continuous**:\
+It tracks performance game by game, without needing to wait for a whole season.
+
+✅ It’s **predictive**:\
+A higher rating difference means a higher expected probability of winning.
+
+-   Players with the same rating are expected to win about equally often.
+-   The ratings adjust automatically to how surprising the outcomes are.
+-   It can handle long histories of matchups without starting over.
+
+You’re using this system to track and compare players like **Jim Elsner**, **Mike Prost**, and others across multiple tournaments.
+
+By plotting Elo over time, you can see:
+
+-   who’s improving
+-   who’s consistent
+-   who might be having up or down seasons.
+
+## References
+
+-   Arpad Elo, *The Rating of Chessplayers, Past and Present*, 1978.
+-   FIDE Handbook on Elo calculation: <https://handbook.fide.com/chapter/B022017>
+-   Wikipedia: <https://en.wikipedia.org/wiki/Elo_rating_system>
+
+
+```{r}
+library(readr)
+games_df <- read_csv(here::here("data", "TallyRallyGames.csv"))
+
+library(dplyr)
+library(tidyr)
+library(PlayerRatings)
+
+# Create all winner vs loser records
+pairwise_results <- games_df %>%
+  filter(!is.na(`Score A`) & !is.na(`Score B`)) %>%
+  mutate(
+    Winning_P1 = if_else(`Score A` > `Score B`, `Team A Player 1`, `Team B Player 1`),
+    Winning_P2 = if_else(`Score A` > `Score B`, `Team A Player 2`, `Team B Player 2`),
+    Losing_P1  = if_else(`Score A` < `Score B`, `Team A Player 1`, `Team B Player 1`),
+    Losing_P2  = if_else(`Score A` < `Score B`, `Team A Player 2`, `Team B Player 2`)
+  ) %>%
+  select(Winning_P1, Winning_P2, Losing_P1, Losing_P2) %>%
+  pivot_longer(cols = c(Winning_P1, Winning_P2), names_to = "win_role", values_to = "Winner") %>%
+  pivot_longer(cols = c(Losing_P1, Losing_P2), names_to = "lose_role", values_to = "Loser") %>%
+  transmute(Date = 1, Player1 = Winner, Player2 = Loser, Score = 1) %>%
+  distinct()
+
+# Now add inverse games (losses count as 0)
+elo_input <- bind_rows(
+  pairwise_results,
+  pairwise_results %>%
+    mutate(Player1 = Player2, Player2 = Player1, Score = 0)
+)
+
+# Run Elo model
+elo_ratings <- elo(elo_input, init = 1500, k = 32)
+
+# Show top 25 players
+elo_ratings$ratings %>%
+  arrange(desc(Rating)) %>%
+  mutate(Rating = round(Rating, 0)) %>%
+  slice_head(n = 25)
+```
+
+The **Elo rating system** is a way to estimate the skill levels of players in competitive games.
+
+It was invented by **Arpad Elo**, a Hungarian-American physics professor and chess master.\
+The system became widely used in chess, but is now used for many sports and games, including online gaming and even evaluating football teams.
+
+The system works like this:
+
+-   Each player starts with an initial rating (commonly 1500).
+-   When two players (or teams) play a match:
+    -   The expected outcome is calculated based on the difference in their ratings.
+    -   If a player performs better than expected (wins against a stronger opponent), they gain more points.
+    -   If a player performs worse than expected (loses to a weaker opponent), they lose more points.
+-   The **K-factor** controls how much the ratings adjust after each game.
+
+The expected score (probability of winning) is:
+
+$$
+E_A = \frac{1}{1 + 10^{(R_B - R_A) / 400}}
+$$
+
+where: - $R_A$ is Player A’s rating - $R_B$ is Player B’s rating
+
+Then after the match:
+
+$$
+R'_A = R_A + K \times (S_A - E_A)
+$$
+
+where: $S_A = 1$ if A wins, $0.5$ if draw, $0$ if A loses and $K$ is the adjustment factor (commonly 32).
+
+✅ It’s **self-correcting**:\
+If a player wins consistently, their rating rises, so future wins give less of a boost (and losses hurt more).
+
+✅ It’s **continuous**:\
+It tracks performance game by game, without needing to wait for a whole season.
+
+✅ It’s **predictive**:\
+A higher rating difference means a higher expected probability of winning.
+
+-   Players with the same rating are expected to win about equally often.
+-   The ratings adjust automatically to how surprising the outcomes are.
+-   It can handle long histories of matchups without starting over.
+
+You’re using this system to track and compare players like **Jim Elsner**, **Mike Prost**, and others across multiple tournaments.
+
+By plotting Elo over time, you can see:
+
+-   who’s improving
+-   who’s consistent
+-   who might be having up or down seasons.
+
+## References
+
+-   Arpad Elo, *The Rating of Chessplayers, Past and Present*, 1978.
+-   FIDE Handbook on Elo calculation: <https://handbook.fide.com/chapter/B022017>
+-   Wikipedia: <https://en.wikipedia.org/wiki/Elo_rating_system>
+
+Elo Escape!! player ratings over time
+
+```{r}
+library(readr)
+# Read your data
+games_df <- read_csv(here("data", "TallyRallyGames.csv"))
+```
+
+# Create proper Date and numeric time index
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(lubridate)
+library(PlayerRatings)
+library(here)
+
+games_df <- games_df %>%
+  mutate(
+    Month_Day_Clean = str_remove(`Month Day`, "(st|nd|rd|th)"),
+    Date_str = paste(Month_Day_Clean, Year),
+    Date = mdy(Date_str)
+  )
+
+# Create numeric index (e.g. days since first date)
+games_df <- games_df %>%
+  arrange(Date) %>%
+  mutate(Date_num = as.integer(difftime(Date, min(Date, na.rm = TRUE), units = "days")))
+
+# Build pairwise winner-loser data
+pairwise_results <- games_df %>%
+  filter(!is.na(`Score A`) & !is.na(`Score B`)) %>%
+  mutate(
+    Winning_P1 = if_else(`Score A` > `Score B`, `Team A Player 1`, `Team B Player 1`),
+    Winning_P2 = if_else(`Score A` > `Score B`, `Team A Player 2`, `Team B Player 2`),
+    Losing_P1  = if_else(`Score A` < `Score B`, `Team A Player 1`, `Team B Player 1`),
+    Losing_P2  = if_else(`Score A` < `Score B`, `Team A Player 2`, `Team B Player 2`)
+  ) %>%
+  select(Date_num, Winning_P1, Winning_P2, Losing_P1, Losing_P2) %>%
+  pivot_longer(c(Winning_P1, Winning_P2), names_to = "win_role", values_to = "Winner") %>%
+  pivot_longer(c(Losing_P1, Losing_P2), names_to = "lose_role", values_to = "Loser") %>%
+  transmute(Date = Date_num, Player1 = Winner, Player2 = Loser, Score = 1) %>%
+  distinct()
+
+# Build input for Elo (losses as 0)
+elo_input <- bind_rows(
+  pairwise_results,
+  pairwise_results %>%
+    mutate(Player1 = Player2, Player2 = Player1, Score = 0)
+)
+
+# Run Elo model
+elo_run <- elo(elo_input, init = 1500, k = 32, history = TRUE)
+
+#  Print final ratings
+elo_ratings$ratings %>%
+  arrange(desc(Rating)) %>%
+  mutate(Rating = round(Rating, 0)) %>%
+  slice_head(n = 25)
+```
+
+```{r}
+library(purrr)
+
+# Extract dim names
+players <- dimnames(elo_run$history)[[1]]
+periods <- dimnames(elo_run$history)[[2]]
+
+# Build tidy data frame
+elo_history <- map_dfr(seq_along(periods), function(i) {
+  tibble(
+    Period = as.integer(periods[i]),
+    Player = players,
+    Rating = elo_run$history[, i, "Rating"]
+  )
+})
+
+# Filter to your players
+players_to_plot <- c("Jim Elsner", "Diana Elsner", "JaSun Burdick", "Craig Anderson", "Hank Bass", "Drew Magee", "Jordan Huston", "Scott Schmucker", "Conrad Damon", "Harvey Brandt", "John Elsner", "Mike Prost")
+elo_history_filtered <- elo_history %>%
+  filter(Player %in% players_to_plot)
+
+library(lubridate)
+
+# Reconstruct dates from Date_num
+period_dates <- elo_input %>%
+  distinct(Date) %>%
+  arrange(Date) %>%
+  mutate(Period = row_number(),
+         Actual_Date = min(games_df$Date, na.rm = TRUE) + days(Date)) %>%
+  select(Period, Actual_Date)
+
+elo_history_with_date <- elo_history %>%
+  left_join(period_dates, by = "Period")
+
+ggplot(elo_history_with_date %>% filter(Player %in% players_to_plot),
+       aes(x = Actual_Date, y = Rating, color = Player)) +
+  geom_line(alpha = 0.7) +  # main lines
+  geom_smooth(se = FALSE, method = "loess", span = 0.75) +  # smoothed trend line
+  facet_wrap(~ Player, scales = "fixed", ncol = 3) +  # small multiples
+  labs(
+    title = "Elo Ratings Over Time by Player",
+    x = "Date",
+    y = "Elo Rating"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+Elo Escape!! team ratings over time
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(PlayerRatings)
+library(lubridate)
+
+games_df <- read_csv(here::here("data", "TallyRallyGames.csv"))
+
+# 1. Prepare data
+games_df <- games_df %>%
+  mutate(
+    # Clean and construct Date
+    Month_Day_Clean = str_remove(`Month Day`, "(st|nd|rd|th)"),
+    Date_str = paste(Month_Day_Clean, Year),
+    Date = mdy(Date_str)
+  ) %>%
+  arrange(Date) %>%
+  mutate(Date_num = as.integer(difftime(Date, min(Date, na.rm = TRUE), units = "days")))
+
+# 2. Build team labels (sorted so "Jim Elsner & John Elsner" always appears that way)
+games_df <- games_df %>%
+  mutate(
+    Team_A = map2_chr(`Team A Player 1`, `Team A Player 2`, ~ paste(sort(c(.x, .y)), collapse = " & ")),
+    Team_B = map2_chr(`Team B Player 1`, `Team B Player 2`, ~ paste(sort(c(.x, .y)), collapse = " & "))
+  )
+
+# 3. Create pairwise results for Elo
+team_results <- games_df %>%
+  filter(!is.na(`Score A`) & !is.na(`Score B`)) %>%
+  transmute(
+    Date = Date_num,
+    Team1 = if_else(`Score A` > `Score B`, Team_A, Team_B),
+    Team2 = if_else(`Score A` > `Score B`, Team_B, Team_A),
+    Score = 1
+  )
+
+# Add the inverse games (losses count as 0)
+team_elo_input <- bind_rows(
+  team_results,
+  team_results %>%
+    transmute(Date = Date, Team1 = Team2, Team2 = Team1, Score = 0)
+)
+
+# 4. Run Elo model
+team_elo_run <- elo(team_elo_input, init = 1500, k = 32, history = TRUE)
+```
+
+
+Plot
+```{r}
+library(purrr)
+library(ggplot2)
+
+# Extract team names and periods
+teams <- dimnames(team_elo_run$history)[[1]]
+periods <- dimnames(team_elo_run$history)[[2]]
+
+# Build tidy data
+team_elo_history <- map_dfr(seq_along(periods), function(i) {
+  tibble(
+    Period = as.integer(periods[i]),
+    Team = teams,
+    Rating = team_elo_run$history[, i, "Rating"]
+  )
+})
+
+# Build mapping: Date_num to Date
+date_lookup <- games_df %>%
+  distinct(Date_num, Date) %>%
+  arrange(Date_num) %>%
+  mutate(Period = row_number())
+
+# Rebuild Elo history
+team_elo_history <- map_dfr(seq_along(periods), function(i) {
+  tibble(
+    Period = as.integer(periods[i]),
+    Team = teams,
+    Rating = team_elo_run$history[, i, "Rating"]
+  )
+})
+
+#  Join actual Date
+team_elo_history <- team_elo_history %>%
+  left_join(date_lookup, by = "Period")
+
+# Plot for just "Jim Elsner & John Elsner"
+team_name <- "Conrad Damon & Craig Anderson"
+
+team_elo_history %>%
+  filter(Team == team_name) %>%
+  ggplot(aes(x = Period, y = Rating)) +
+  geom_line(color = "blue", linewidth = 1) +
+  labs(
+    title = paste("Elo Rating Over Time:", team_name),
+    x = "Game Period",
+    y = "Elo Rating"
+  ) +
+  theme_minimal()
+
+```
+
+Compute & extract top 20 teams by Elo rating
+```{r}
+library(dplyr)
+
+# Compute final Elo ratings for all teams
+final_team_ratings <- team_elo_run$ratings %>%
+  as_tibble() %>%
+  rename(
+    Team = Player,
+    Rating = Rating,
+    Games = Games,
+    Wins = Win,
+    Draws = Draw,
+    Losses = Loss
+  ) %>%
+  arrange(desc(Rating))
+
+# Get top 20
+top_20_teams <- final_team_ratings %>%
+  slice_head(n = 20)
+
+# Print
+top_20_teams
+```
+
+Nice table
+```{r}
+library(gt)
+
+top_20_teams %>%
+  select(Team, Rating, Games, Wins, Losses) %>%
+  gt() %>%
+  tab_header(
+    title = "Top 20 Teams by Elo Rating"
+  ) %>%
+  fmt_number(columns = Rating, decimals = 0)
+
+```
+
+
+
