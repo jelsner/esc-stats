@@ -67,7 +67,7 @@ By plotting Elo over time, you can see:
 
 ```{r}
 library(readr)
-games_df <- read_csv(here::here("data", "TallyRallyGames.csv"))
+games_df <- read_csv(here::here("data", "LeagueGamesFAKE.csv"))
 
 library(dplyr)
 library(tidyr)
@@ -104,63 +104,6 @@ elo_ratings$ratings %>%
   mutate(Rating = round(Rating, 0)) %>%
   slice_head(n = 25)
 ```
-
-The **Elo rating system** is a way to estimate the skill levels of players in competitive games.
-
-It was invented by **Arpad Elo**, a Hungarian-American physics professor and chess master.\
-The system became widely used in chess, but is now used for many sports and games, including online gaming and even evaluating football teams.
-
-The system works like this:
-
--   Each player starts with an initial rating (commonly 1500).
--   When two players (or teams) play a match:
-    -   The expected outcome is calculated based on the difference in their ratings.
-    -   If a player performs better than expected (wins against a stronger opponent), they gain more points.
-    -   If a player performs worse than expected (loses to a weaker opponent), they lose more points.
--   The **K-factor** controls how much the ratings adjust after each game.
-
-The expected score (probability of winning) is:
-
-$$
-E_A = \frac{1}{1 + 10^{(R_B - R_A) / 400}}
-$$
-
-where: - $R_A$ is Player A’s rating - $R_B$ is Player B’s rating
-
-Then after the match:
-
-$$
-R'_A = R_A + K \times (S_A - E_A)
-$$
-
-where: $S_A = 1$ if A wins, $0.5$ if draw, $0$ if A loses and $K$ is the adjustment factor (commonly 32).
-
-✅ It’s **self-correcting**:\
-If a player wins consistently, their rating rises, so future wins give less of a boost (and losses hurt more).
-
-✅ It’s **continuous**:\
-It tracks performance game by game, without needing to wait for a whole season.
-
-✅ It’s **predictive**:\
-A higher rating difference means a higher expected probability of winning.
-
--   Players with the same rating are expected to win about equally often.
--   The ratings adjust automatically to how surprising the outcomes are.
--   It can handle long histories of matchups without starting over.
-
-You’re using this system to track and compare players like **Jim Elsner**, **Mike Prost**, and others across multiple tournaments.
-
-By plotting Elo over time, you can see:
-
--   who’s improving
--   who’s consistent
--   who might be having up or down seasons.
-
-## References
-
--   Arpad Elo, *The Rating of Chessplayers, Past and Present*, 1978.
--   FIDE Handbook on Elo calculation: <https://handbook.fide.com/chapter/B022017>
--   Wikipedia: <https://en.wikipedia.org/wiki/Elo_rating_system>
 
 Elo Escape!! player ratings over time
 
@@ -322,7 +265,6 @@ team_elo_input <- bind_rows(
 team_elo_run <- elo(team_elo_input, init = 1500, k = 32, history = TRUE)
 ```
 
-
 Plot
 ```{r}
 library(purrr)
@@ -414,6 +356,3 @@ top_20_teams %>%
   fmt_number(columns = Rating, decimals = 0)
 
 ```
-
-
-
