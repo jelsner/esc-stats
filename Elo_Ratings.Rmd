@@ -64,14 +64,557 @@ By plotting Elo over time, you can see:
 -   FIDE Handbook on Elo calculation: <https://handbook.fide.com/chapter/B022017>
 -   Wikipedia: <https://en.wikipedia.org/wiki/Elo_rating_system>
 
+```{r}
+library(dplyr)
+
+# Load data
+df <- read.csv("data/LeagueGames.csv", stringsAsFactors = FALSE) 
+
+# Create a data frame to store win/loss for each player
+player_records <- data.frame(Player = character(), Wins = integer(), Losses = integer(), stringsAsFactors = FALSE)
+
+record_win <- function(player) {
+  if (!(player %in% player_records$Player)) {
+    player_records <<- rbind(player_records, data.frame(Player = player, Wins = 0, Losses = 0))
+  }
+  player_records[player_records$Player == player, "Wins"] <<- player_records[player_records$Player == player, "Wins"] + 1
+}
+
+record_loss <- function(player) {
+  if (!(player %in% player_records$Player)) {
+    player_records <<- rbind(player_records, data.frame(Player = player, Wins = 0, Losses = 0))
+  }
+  player_records[player_records$Player == player, "Losses"] <<- player_records[player_records$Player == player, "Losses"] + 1
+}
+
+# Initialize Elo ratings (default to 1500)
+player_elos <- new.env()
+default_elo <- 1500
+k_factor <- 32
+
+get_elo <- function(player) {
+  if (!exists(player, envir = player_elos)) {
+    assign(player, default_elo, envir = player_elos)
+  }
+  get(player, envir = player_elos)
+}
+
+set_elo <- function(player, new_rating) {
+  assign(player, new_rating, envir = player_elos)
+}
+
+update_elo <- function(player_a, player_b, outcome, k = k_factor) {
+  rating_a <- get_elo(player_a)
+  rating_b <- get_elo(player_b)
+  expected_a <- 1 / (1 + 10^((rating_b - rating_a) / 400))
+  rating_a_new <- rating_a + k * (outcome - expected_a)
+  rating_b_new <- rating_b + k * ((1 - outcome) - (1 - expected_a))
+  set_elo(player_a, rating_a_new)
+  set_elo(player_b, rating_b_new)
+}
+
+# Process each game
+for (i in 1:nrow(df)) {
+  A1 <- df$`Team.A.Player.1`[i]
+  A2 <- df$`Team.A.Player.2`[i]
+  B1 <- df$`Team.B.Player.1`[i]
+  B2 <- df$`Team.B.Player.2`[i]
+  score_a <- df$Score.A[i]
+  score_b <- df$Score.B[i]
+
+  elo_A <- (get_elo(A1) + get_elo(A2)) / 2
+  elo_B <- (get_elo(B1) + get_elo(B2)) / 2
+
+  expected_A <- 1 / (1 + 10^((elo_B - elo_A) / 400))
+  outcome_A <- ifelse(score_a > score_b, 1, 0)
+  delta <- k_factor * (outcome_A - expected_A)
+
+  for (player in c(A1, A2)) {
+    set_elo(player, get_elo(player) + delta / 2)
+    if (outcome_A == 1) {
+      record_win(player)
+    } else {
+      record_loss(player)
+    }
+  }
+  for (player in c(B1, B2)) {
+    set_elo(player, get_elo(player) - delta / 2)
+    if (outcome_A == 0) {
+      record_win(player)
+    } else {
+      record_loss(player)
+    }
+  }
+}
+
+# Combine Elo and win-loss record
+final_elos <- as.data.frame(as.list(player_elos)) %>%
+  tidyr::pivot_longer(cols = everything(), names_to = "Player", values_to = "Elo") %>%
+  left_join(player_records, by = "Player") %>%
+  mutate(Wins = replace_na(Wins, 0),
+         Losses = replace_na(Losses, 0),
+         WinPct = round(Wins / (Wins + Losses), 3),
+         Games = Wins + Losses) %>%
+  filter(Games >= 25) %>%
+  arrange(desc(Elo))
+
+print(final_elos, n = 25)
+```
+
+Script with Elo history tracking & plotting by ordinal game count
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Load and preprocess
+df <- read.csv("data/LeagueGames.csv", stringsAsFactors = FALSE)
+df$Date <- as.Date(df$Date)
+df <- df[order(df$Date), ]  # Ensure games are processed in order
+
+# Initialize
+player_records <- data.frame(Player = character(), Wins = integer(), Losses = integer(), stringsAsFactors = FALSE)
+player_elos <- new.env()
+elo_history <- data.frame(GameNumber = integer(), Player = character(), Elo = numeric(), stringsAsFactors = FALSE)
+default_elo <- 1500
+k_factor <- 32
+game_counter <- 1
+
+get_elo <- function(player) {
+  if (!exists(player, envir = player_elos)) {
+    assign(player, default_elo, envir = player_elos)
+  }
+  get(player, envir = player_elos)
+}
+
+set_elo <- function(player, new_rating) {
+  assign(player, new_rating, envir = player_elos)
+}
+
+record_win <- function(player) {
+  if (!(player %in% player_records$Player)) {
+    player_records <<- rbind(player_records, data.frame(Player = player, Wins = 0, Losses = 0))
+  }
+  player_records[player_records$Player == player, "Wins"] <<- player_records[player_records$Player == player, "Wins"] + 1
+}
+
+record_loss <- function(player) {
+  if (!(player %in% player_records$Player)) {
+    player_records <<- rbind(player_records, data.frame(Player = player, Wins = 0, Losses = 0))
+  }
+  player_records[player_records$Player == player, "Losses"] <<- player_records[player_records$Player == player, "Losses"] + 1
+}
+
+# Process games
+for (i in 1:nrow(df)) {
+  A1 <- df$`Team.A.Player.1`[i]
+  A2 <- df$`Team.A.Player.2`[i]
+  B1 <- df$`Team.B.Player.1`[i]
+  B2 <- df$`Team.B.Player.2`[i]
+  score_a <- df$Score.A[i]
+  score_b <- df$Score.B[i]
+
+  elo_A <- (get_elo(A1) + get_elo(A2)) / 2
+  elo_B <- (get_elo(B1) + get_elo(B2)) / 2
+
+  expected_A <- 1 / (1 + 10^((elo_B - elo_A) / 400))
+  outcome_A <- ifelse(score_a > score_b, 1, 0)
+  delta <- k_factor * (outcome_A - expected_A)
+
+  for (player in c(A1, A2)) {
+    new_elo <- get_elo(player) + delta / 2
+    set_elo(player, new_elo)
+    if (outcome_A == 1) {
+      record_win(player)
+    } else {
+      record_loss(player)
+    }
+    elo_history <- rbind(elo_history, data.frame(GameNumber = game_counter, Player = player, Elo = new_elo))
+  }
+
+  for (player in c(B1, B2)) {
+    new_elo <- get_elo(player) - delta / 2
+    set_elo(player, new_elo)
+    if (outcome_A == 0) {
+      record_win(player)
+    } else {
+      record_loss(player)
+    }
+    elo_history <- rbind(elo_history, data.frame(GameNumber = game_counter, Player = player, Elo = new_elo))
+  }
+
+  game_counter <- game_counter + 1
+}
+
+# Plot Elo trajectory using game number
+plot_elo_ordinal <- function(player_name) {
+  elo_history %>%
+    filter(Player == player_name) %>%
+    ggplot(aes(x = GameNumber, y = Elo)) +
+    geom_line(color = "steelblue", linewidth = 1) +
+    geom_point(size = 2) +
+    labs(title = paste("Elo Rating Over Games for", player_name),
+         x = "Game Number (Ordinal)",
+         y = "Elo Rating") +
+    theme_minimal()
+}
+
+# Example:
+plot_elo_ordinal("Augie")
+
+# Plot Elo over ordinal games for multiple players
+plot_elo_multi <- function(player_names) {
+  elo_history %>%
+    filter(Player %in% player_names) %>%
+    ggplot(aes(x = GameNumber, y = Elo, color = Player)) +
+    geom_line(size = 1.2) +
+    labs(title = "Elo Ratings Over Games",
+         x = "Game Number (Ordinal)",
+         y = "Elo Rating",
+         color = "Player") +
+    theme_minimal() +
+    theme(legend.position = "right")
+}
+
+# Example usage: compare 4 players
+plot_elo_multi(c("Maya", "Jim", "Jacob", "Craig", "Scott", "Jordan", "Drew", "JaSun"))
+
+```
+
+Maya's cumultative point differential over time
 
 ```{r}
-library(readr)
-games_df <- read_csv(here::here("data", "LeagueGamesFAKE.csv"))
+library(dplyr)
+library(ggplot2)
 
+# Step 1: Sort games by date
+df$Date <- as.Date(df$Date)
+df <- df[order(df$Date), ]
+df$GameNumber <- 1:nrow(df)
+
+# Step 2: Identify games Maya played in and calculate point differential
+maya_diff <- df %>%
+  filter(`Team.A.Player.1` == "Maya" | `Team.A.Player.2` == "Maya" |
+         `Team.B.Player.1` == "Maya" | `Team.B.Player.2` == "Maya") %>%
+  mutate(
+    Team = ifelse(`Team.A.Player.1` == "Maya" | `Team.A.Player.2` == "Maya", "A", "B"),
+    Diff = ifelse(Team == "A", Score.A - Score.B, Score.B - Score.A)
+  ) %>%
+  select(GameNumber, Date, Diff) %>%
+  arrange(GameNumber) %>%
+  mutate(CumDiff = cumsum(Diff))
+
+# Step 3: Plot
+ggplot(maya_diff, aes(x = GameNumber, y = CumDiff)) +
+  geom_line(color = "firebrick", size = 1.2) +
+  labs(title = "Maya's Cumulative Point Differential Over Time",
+       x = "Game Number (Ordinal)",
+       y = "Cumulative Point Differential") +
+  theme_minimal()
+
+```
+
+Script with Elo history tracking & plotting by date
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Load data
+df <- read.csv("data/LeagueGames.csv", stringsAsFactors = FALSE)
+df$Date <- as.Date(df$Date)
+
+# Create win/loss record
+player_records <- data.frame(Player = character(), Wins = integer(), Losses = integer(), stringsAsFactors = FALSE)
+
+record_win <- function(player) {
+  if (!(player %in% player_records$Player)) {
+    player_records <<- rbind(player_records, data.frame(Player = player, Wins = 0, Losses = 0))
+  }
+  player_records[player_records$Player == player, "Wins"] <<- player_records[player_records$Player == player, "Wins"] + 1
+}
+
+record_loss <- function(player) {
+  if (!(player %in% player_records$Player)) {
+    player_records <<- rbind(player_records, data.frame(Player = player, Wins = 0, Losses = 0))
+  }
+  player_records[player_records$Player == player, "Losses"] <<- player_records[player_records$Player == player, "Losses"] + 1
+}
+
+# Initialize Elo environment
+player_elos <- new.env()
+default_elo <- 1500
+k_factor <- 32
+
+get_elo <- function(player) {
+  if (!exists(player, envir = player_elos)) {
+    assign(player, default_elo, envir = player_elos)
+  }
+  get(player, envir = player_elos)
+}
+
+set_elo <- function(player, new_rating) {
+  assign(player, new_rating, envir = player_elos)
+}
+
+# Initialize Elo history tracking
+elo_history <- data.frame(Date = as.Date(character()),
+                          Player = character(),
+                          Elo = numeric(),
+                          stringsAsFactors = FALSE)
+
+# Process each game and record Elo history
+df <- df[order(df$Date), ]
+
+for (i in 1:nrow(df)) {
+  row <- df[i, ]
+  A1 <- row$Team.A.Player.1
+  A2 <- row$Team.A.Player.2
+  B1 <- row$Team.B.Player.1
+  B2 <- row$Team.B.Player.2
+  score_a <- row$Score.A
+  score_b <- row$Score.B
+  game_date <- row$Date
+
+  elo_A <- (get_elo(A1) + get_elo(A2)) / 2
+  elo_B <- (get_elo(B1) + get_elo(B2)) / 2
+
+  expected_A <- 1 / (1 + 10^((elo_B - elo_A) / 400))
+  outcome_A <- ifelse(score_a > score_b, 1, 0)
+  delta <- k_factor * (outcome_A - expected_A)
+
+  for (player in c(A1, A2)) {
+    new_elo <- get_elo(player) + delta / 2
+    set_elo(player, new_elo)
+    if (outcome_A == 1) {
+      record_win(player)
+    } else {
+      record_loss(player)
+    }
+    elo_history <- rbind(elo_history, data.frame(Date = game_date, Player = player, Elo = new_elo))
+  }
+
+  for (player in c(B1, B2)) {
+    new_elo <- get_elo(player) - delta / 2
+    set_elo(player, new_elo)
+    if (outcome_A == 0) {
+      record_win(player)
+    } else {
+      record_loss(player)
+    }
+    elo_history <- rbind(elo_history, data.frame(Date = game_date, Player = player, Elo = new_elo))
+  }
+}
+
+# Plot Elo rating for a specific player
+plot_elo <- function(player_name) {
+  p_data <- elo_history %>%
+    filter(Player == player_name) %>%
+    arrange(Date)
+
+  ggplot(p_data, aes(x = Date, y = Elo)) +
+    geom_line(color = "steelblue", linewidth = 1) +
+    geom_point(size = 2) +
+    labs(title = paste("Elo Rating Over Time for", player_name),
+         x = "Date", y = "Elo Rating") +
+    theme_minimal()
+}
+
+# Example usage:
+plot_elo("Maya")
+
+```
+
+Network of successful partnerships
+```{r}
+library(dplyr)
+library(tidyr)
+library(igraph)
+library(ggraph)
+
+# Load and sort game data
+df <- read.csv("data/LeagueGames.csv", stringsAsFactors = FALSE)
+df$Date <- as.Date(df$Date)
+df <- df[order(df$Date), ]
+
+# Store win/loss records between teammates
+teammate_records <- list()
+
+`%||%` <- function(a, b) if (!is.null(a)) a else b  # safe default operator
+
+for (i in 1:nrow(df)) {
+  row <- df[i, ]
+  team_a <- c(row$Team.A.Player.1, row$Team.A.Player.2)
+  team_b <- c(row$Team.B.Player.1, row$Team.B.Player.2)
+  winner <- ifelse(row$Score.A > row$Score.B, "A", "B")
+
+  team_a_key <- paste(sort(team_a), collapse = "_")
+  teammate_records[[team_a_key]] <- teammate_records[[team_a_key]] %||% list(W = 0, L = 0)
+  if (winner == "A") {
+    teammate_records[[team_a_key]]$W <- teammate_records[[team_a_key]]$W + 1
+  } else {
+    teammate_records[[team_a_key]]$L <- teammate_records[[team_a_key]]$L + 1
+  }
+
+  team_b_key <- paste(sort(team_b), collapse = "_")
+  teammate_records[[team_b_key]] <- teammate_records[[team_b_key]] %||% list(W = 0, L = 0)
+  if (winner == "B") {
+    teammate_records[[team_b_key]]$W <- teammate_records[[team_b_key]]$W + 1
+  } else {
+    teammate_records[[team_b_key]]$L <- teammate_records[[team_b_key]]$L + 1
+  }
+}
+
+# Convert teammate win-loss data to a data frame
+teammate_df <- tibble::tibble()
+for (pair in names(teammate_records)) {
+  players <- unlist(strsplit(pair, "_"))
+  W <- teammate_records[[pair]]$W
+  L <- teammate_records[[pair]]$L
+  G <- W + L
+  WLpct <- ifelse(G > 0, W / G, NA)
+  teammate_df <- bind_rows(teammate_df,
+                           data.frame(Player1 = players[1], Player2 = players[2],
+                                      Wins = W, Losses = L, Games = G, WLpct = WLpct))
+}
+
+# Only keep teammate pairs with >5 games together
+teammate_df <- teammate_df %>%
+  filter(Games >= 3)
+
+# Find best teammate (highest W-L %) for each player
+best_partners <- teammate_df %>%
+  mutate(PlayerA = Player1, PlayerB = Player2) %>%
+  bind_rows(
+    select(., Player = PlayerA, Partner = PlayerB, Games, WLpct),
+    select(., Player = PlayerB, Partner = PlayerA, Games, WLpct)
+  ) %>%
+  group_by(Player) %>%
+  filter(Games > 5) %>%
+  arrange(desc(WLpct)) %>%
+  slice(1) %>%
+  ungroup()
+
+# Create directed edges
+edges <- best_partners %>%
+  select(from = Player, to = Partner, weight = WLpct) %>%
+  mutate(pair_id = paste(pmin(from, to), pmax(from, to), sep = "_"))
+
+# Identify bidirectional edges
+bidirectional <- edges %>%
+  group_by(pair_id) %>%
+  filter(n() == 2) %>%
+  ungroup()
+
+edges <- edges %>%
+  mutate(bidirectional = pair_id %in% bidirectional$pair_id)
+
+# Create igraph object
+g <- graph_from_data_frame(edges, directed = TRUE)
+
+# Plot with ggraph
+g <- delete_vertices(g, V(g)[name == "NA"])
+ggraph(g, layout = "fr") +
+  geom_edge_link(aes(width = weight),
+                 arrow = arrow(length = unit(4, "mm"), type = "closed"),
+                 end_cap = circle(3, 'mm'),
+                 start_cap = circle(3, 'mm'),
+                 color = "gray80",
+                 lineend = "round") +
+  scale_edge_width(range = c(0.5, 2.5), guide = "none") +
+  geom_node_point(size = 5, color = "steelblue") +
+  geom_node_text(aes(label = name), repel = TRUE, size = 4) +
+  theme_void() +
+  labs(title = "Best Teammate Network")
+```
+
+Teammate W–L % ranked for each player
+```{r}
+library(dplyr)
+library(tidyr)
+
+# Load game data
+df <- read.csv("data/LeagueGames.csv", stringsAsFactors = FALSE)
+
+# Step 1: build team records by sorted pair of players
+team_records <- list()
+
+for (i in 1:nrow(df)) {
+  row <- df[i, ]
+  
+  # Define teams
+  team_a <- sort(c(row$Team.A.Player.1, row$Team.A.Player.2))
+  team_b <- sort(c(row$Team.B.Player.1, row$Team.B.Player.2))
+  winner <- ifelse(row$Score.A > row$Score.B, "A", "B")
+
+  # A team record
+  key_a <- paste(team_a, collapse = "_")
+  if (!key_a %in% names(team_records)) {
+    team_records[[key_a]] <- list(players = team_a, wins = 0, losses = 0)
+  }
+  if (winner == "A") {
+    team_records[[key_a]]$wins <- team_records[[key_a]]$wins + 1
+  } else {
+    team_records[[key_a]]$losses <- team_records[[key_a]]$losses + 1
+  }
+
+  # B team record
+  key_b <- paste(team_b, collapse = "_")
+  if (!key_b %in% names(team_records)) {
+    team_records[[key_b]] <- list(players = team_b, wins = 0, losses = 0)
+  }
+  if (winner == "B") {
+    team_records[[key_b]]$wins <- team_records[[key_b]]$wins + 1
+  } else {
+    team_records[[key_b]]$losses <- team_records[[key_b]]$losses + 1
+  }
+}
+
+# Step 2: expand to player-wise view
+player_teammate_stats <- data.frame(Player = character(), 
+                                    Teammate = character(), 
+                                    Wins = integer(), 
+                                    Losses = integer(),
+                                    WLpct = numeric(),
+                                    stringsAsFactors = FALSE)
+
+for (record in team_records) {
+  p1 <- record$players[1]
+  p2 <- record$players[2]
+  wins <- record$wins
+  losses <- record$losses
+  total <- wins + losses
+  wlpct <- ifelse(total > 0, wins / total, NA)
+
+  player_teammate_stats <- bind_rows(
+    player_teammate_stats,
+    data.frame(Player = p1, Teammate = p2, Wins = wins, Losses = losses, WLpct = round(wlpct, 3)),
+    data.frame(Player = p2, Teammate = p1, Wins = wins, Losses = losses, WLpct = round(wlpct, 3))
+  )
+}
+
+# Step 3: sort teammates for each player by WL %
+ranked_teammates <- player_teammate_stats %>%
+  filter(Wins + Losses > 5) %>%
+  arrange(Player, WLpct)
+
+# View result
+print(ranked_teammates)
+
+```
+
+
+
+
+OLDER
+```{r}
+library(readr)
 library(dplyr)
 library(tidyr)
 library(PlayerRatings)
+
+games_df <- read_csv(here::here("data", "LeagueGames.csv")) |>
+  filter(Type == "Regular")
 
 # Create all winner vs loser records
 pairwise_results <- games_df %>%
