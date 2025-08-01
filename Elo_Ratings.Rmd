@@ -66,6 +66,7 @@ By plotting Elo over time, you can see:
 
 ```{r}
 library(dplyr)
+library(tidyr)
 
 # Load data
 df <- read.csv("data/LeagueGames.csv", stringsAsFactors = FALSE) 
@@ -260,14 +261,14 @@ plot_elo_ordinal <- function(player_name) {
 }
 
 # Example:
-plot_elo_ordinal("Augie")
+plot_elo_ordinal("Drew")
 
 # Plot Elo over ordinal games for multiple players
 plot_elo_multi <- function(player_names) {
   elo_history %>%
     filter(Player %in% player_names) %>%
     ggplot(aes(x = GameNumber, y = Elo, color = Player)) +
-    geom_line(size = 1.2) +
+    geom_line(linewidth = 1.2) +
     labs(title = "Elo Ratings Over Games",
          x = "Game Number (Ordinal)",
          y = "Elo Rating",
@@ -277,7 +278,7 @@ plot_elo_multi <- function(player_names) {
 }
 
 # Example usage: compare 4 players
-plot_elo_multi(c("Maya", "Jim", "Jacob", "Craig", "Scott", "Jordan", "Drew", "JaSun"))
+plot_elo_multi(c("Jim", "Jacob", "Craig", "Jordan", "Drew", "JaSun"))
 
 ```
 

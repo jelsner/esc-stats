@@ -1,24 +1,23 @@
 library(reticulate)
-use_python("/Users/jameselsner/miniforge3/envs/era5arm/bin/python", required = TRUE)
-py_config()
 
-download_era5_city <- function(lat, lon, year = 2020, outfile = "era5_hourly.nc") {
-  cmd <- glue::glue("python3 download_era5_hourly.py {lat} {lon} {year} {outfile}")
-  system(cmd)
+# Set Python environment
+use_python("/Users/jameselsner/miniforge3/envs/era5arm/bin/python", required = TRUE)
+
+# Function to run the download script using reticulate
+download_era5_city_year <- function(lat, lon, year, city_name) {
+  output_dir <- file.path("data/output", city_name)
+  py_run_string(glue::glue("
+import sys
+sys.argv = ['', '{lat}', '{lon}', '{year}', '{output_dir}']
+exec(open('download_era5_hourly_by_month.py').read())
+"))
 }
 
+# Example
 startTime <- Sys.time()
-#download_era5_city(lat = 37.3382, lon = -121.8863, year = 2020, outfile = "data/output/sanjose_2020.nc")
-#download_era5_city(lat = 30.4383, lon = -84.2807, year = 2020, outfile = "data/output/tallahassee_2020.nc")
-download_era5_city(lat = 43.0389, lon = -87.9065, year = 2020, outfile = "data/output/milwaukee_2020.nc")
+download_era5_city_year(lat = 30.4383, lon = -84.2807, year = 2022, city_name = "tallahassee")
 Sys.time() - startTime
 
-# 2-3 minutes for a month of hourly data
+# ~30 minutes for 12 months
 
-#
-#City	Latitude	Longitude
-#San Jose, CA	37.3382	-121.8863
-#Milwaukee, WI	43.0389	-87.9065
-#Washington, DC	38.9072	-77.0369
-#Tallahassee, FL	30.4383	-84.2807
-#Scottsdale, AZ	33.4942	-111.9261
+#30.4383	-84.2807
