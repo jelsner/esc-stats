@@ -15,7 +15,7 @@ exec(open('download_era5_hourly_by_month.py').read())
 
 # Example
 startTime <- Sys.time()
-download_era5_city_year(lat = 30.4383, lon = -84.2807, year = 2022, city_name = "tallahassee")
+download_era5_city_year(lat = 30.4383, lon = -84.2807, year = 2023, city_name = "tallahassee")
 Sys.time() - startTime
 
 # ~30 minutes for 12 months

@@ -38,7 +38,7 @@ analyze_ddc_file <- function(file_path, lat, lon) {
 }
 
 
-# === Loop through monthly files ===
+# === Loop through monthly files for a single year (here: 2020) ===
 
 analyze_ddc_year <- function(folder, lat, lon) {
   files <- list.files(folder, pattern = "^data_2020_\\d{2}\\.nc$", full.names = TRUE)
