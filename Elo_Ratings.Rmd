@@ -264,12 +264,14 @@ plot_elo_ordinal <- function(player_name) {
     labs(title = paste("Elo Rating Over Games for", player_name),
          x = "Game Number (Ordinal)",
          y = "Elo Rating") +
-    ylim(c(1400, 1750)) +
+    ylim(c(1300, 1750)) +
     theme_minimal()
 }
+```
 
+```{r}
 # Example:
-plot_elo_ordinal("Augie")
+plot_elo_ordinal("Jacob")
 ```
 
 ```{r}
@@ -286,13 +288,15 @@ plot_elo_multi <- function(player_names) {
     theme_minimal() +
     theme(legend.position = "right")
 }
+```
 
+```{r}
 # Example usage: compare 4 players
-plot_elo_multi(c("Jim", "Jacob", "Craig", "Jordan", "Drew", "JaSun"))
+plot_elo_multi(c("Jacob", "Vergil", "Craig"))
 
 ```
 
-Maya's cumultative point differential over time
+Maya's accumulated point differential over time
 
 ```{r}
 library(dplyr)
@@ -430,10 +434,11 @@ plot_elo <- function(player_name) {
          x = "Date", y = "Elo Rating") +
     theme_minimal()
 }
+```
 
+```{r}
 # Example usage:
-plot_elo("Drew")
-
+plot_elo("Jacob")
 ```
 
 Network of successful partnerships
@@ -489,9 +494,10 @@ for (pair in names(teammate_records)) {
                                       Wins = W, Losses = L, Games = G, WLpct = WLpct))
 }
 
-# Only keep teammate pairs with >5 games together
+# Only keep teammate pairs with games together
+no_of_games <- 10
 teammate_df <- teammate_df %>%
-  filter(Games >= 3)
+  filter(Games >= no_of_games)
 
 # Find best teammate (highest W-L %) for each player
 best_partners <- teammate_df %>%
@@ -501,7 +507,7 @@ best_partners <- teammate_df %>%
     select(., Player = PlayerB, Partner = PlayerA, Games, WLpct)
   ) %>%
   group_by(Player) %>%
-  filter(Games > 5) %>%
+  filter(Games >= no_of_games) %>%
   arrange(desc(WLpct)) %>%
   slice(1) %>%
   ungroup()
@@ -536,7 +542,7 @@ ggraph(g, layout = "fr") +
   geom_node_point(size = 5, color = "steelblue") +
   geom_node_text(aes(label = name), repel = TRUE, size = 4) +
   theme_void() +
-  labs(title = "Best Teammate Network")
+  labs(title = "Besties")
 ```
 
 Teammate W–L % ranked for each player
