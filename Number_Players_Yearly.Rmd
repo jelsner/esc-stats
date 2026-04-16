@@ -1,52 +1,187 @@
 ---
-title: "Number of unique players per year"
+title: "New DDC Players by Year"
 output: html_document
 date: "2025-07-02"
-editor_options: 
+editor_options:
   chunk_output_type: console
 ---
 
-```{r}
+```{r setup}
 library(dplyr)
 library(ggplot2)
 library(readr)
 library(tidyr)
+library(here)
+library(knitr)
+```
 
-# Load your data
-ddc_data <- read_csv(here::here("data", "output", "ddc_full_tournament_data_auto.csv"))
+```{r load-data}
+ddc_data <- read_csv(
+  here("data", "output", "ddc_full_tournament_data_auto.csv"),
+  show_col_types = FALSE
+)
 
-missing_players <- ddc_data %>%
-  filter(is.na(Player1) | is.na(Player2))
+all_levels <- c("A", "B", "C", "D")
+included_divisions <- "Open"
+last_year <- 2025
+growth_start_year <- 2010
+```
 
-# Print summary
-cat("Number of rows with missing players:", nrow(missing_players), "\n\n")
+This analysis counts a player as "new" in the first year they appear in the filtered tournament data. The plots use Open division results from A-D level tournaments through `r last_year`. The hard-coded `last_year` excludes incomplete current-year data.
 
-ddc_data %>%
-  filter(is.na(Year))
+```{r build-player-debuts}
+player_level_years <- ddc_data %>%
+  filter(
+    Division %in% included_divisions,
+    Level %in% all_levels,
+    !is.na(Year),
+    Year <= last_year
+  ) %>%
+  select(Year, Level, Player1, Player2) %>%
+  pivot_longer(
+    cols = c(Player1, Player2),
+    names_to = "PlayerRole",
+    values_to = "Player"
+  ) %>%
+  mutate(Player = trimws(Player)) %>%
+  filter(!is.na(Player), Player != "") %>%
+  distinct(Year, Level, Player)
 
-# Show the problematic rows
-print(missing_players)
+make_new_players_by_year <- function(player_years, end_year = last_year) {
+  player_debuts <- player_years %>%
+    group_by(Player) %>%
+    summarize(FirstYear = min(Year), .groups = "drop")
 
-# Calculate unique players by year
-player_counts <- ddc_data %>%
-  filter(Division == "Open") %>%
-  filter(Level == "A" | Level == "B" | Level == "C") %>%
-  filter(!is.na(Year)) %>%   # <-- exclude rows without Year
-  select(Year, Player1, Player2) %>%
-  pivot_longer(cols = c(Player1, Player2), names_to = "PlayerRole", values_to = "Player") %>%
-  filter(!is.na(Player)) %>%
-  distinct(Year, Player) %>%
-  count(Year, name = "UniquePlayers")
+  year_range <- seq(min(player_years$Year), end_year)
 
-# Plot
-ggplot(player_counts, aes(x = Year, y = UniquePlayers)) +
+  player_debuts %>%
+    count(FirstYear, name = "NewPlayers") %>%
+    rename(Year = FirstYear) %>%
+    right_join(tibble(Year = year_range), by = "Year") %>%
+    mutate(NewPlayers = replace_na(NewPlayers, 0L)) %>%
+    arrange(Year) %>%
+    mutate(CumulativeNewPlayers = cumsum(NewPlayers))
+}
+
+player_years_all_levels <- player_level_years %>%
+  distinct(Year, Player)
+
+new_players_by_year <- make_new_players_by_year(player_years_all_levels)
+
+kable(head(new_players_by_year, 10))
+kable(tail(new_players_by_year, 10))
+```
+
+```{r plot-new-players}
+ggplot(new_players_by_year, aes(x = Year, y = NewPlayers)) +
+  geom_col(fill = "steelblue") +
+  labs(
+    title = "New Open Division DDC Players by First Appearance Year",
+    subtitle = "A-D level tournaments",
+    x = "First appearance year",
+    y = "New players"
+  ) +
+  theme_minimal()
+```
+
+```{r plot-cumulative-new-players}
+ggplot(new_players_by_year, aes(x = Year, y = CumulativeNewPlayers)) +
   geom_line(color = "steelblue", linewidth = 1.2) +
   geom_point(color = "tomato", size = 2) +
   labs(
-    title = "Number of Unique Tournament Players per Year",
+    title = "Cumulative New Open Division DDC Players",
+    subtitle = "A-D level tournaments",
     x = "Year",
-    y = "Unique Players"
+    y = "Cumulative players"
   ) +
   theme_minimal()
+```
 
+## Growth By Tournament Level, 2010-2025
+
+```{r growth-by-level}
+make_growth_summary <- function(series, label, start_year = growth_start_year, end_year = last_year) {
+  growth_period <- series %>%
+    filter(Year >= start_year, Year <= end_year)
+
+  players_at_start <- series %>%
+    filter(Year < start_year) %>%
+    summarize(Players = max(CumulativeNewPlayers, 0L)) %>%
+    pull(Players)
+
+  players_at_end <- series %>%
+    filter(Year <= end_year) %>%
+    summarize(Players = max(CumulativeNewPlayers, 0L)) %>%
+    pull(Players)
+
+  years_in_period <- end_year - start_year + 1
+  new_players_added <- sum(growth_period$NewPlayers)
+  avg_new_players_per_year <- mean(growth_period$NewPlayers)
+  median_new_players_per_year <- median(growth_period$NewPlayers)
+
+  growth_pct <- if (players_at_start > 0) {
+    (players_at_end / players_at_start - 1) * 100
+  } else {
+    NA_real_
+  }
+
+  annualized_growth_rate <- if (players_at_start > 0) {
+    (players_at_end / players_at_start)^(1 / years_in_period) - 1
+  } else {
+    NA_real_
+  }
+
+  growth_model <- lm(CumulativeNewPlayers ~ Year, data = growth_period)
+
+  tibble(
+    Level = label,
+    Period = paste(start_year, end_year, sep = "-"),
+    PlayersAtStart = players_at_start,
+    PlayersAtEnd = players_at_end,
+    NewPlayersAdded = new_players_added,
+    AverageNewPlayersPerYear = round(avg_new_players_per_year, 1),
+    MedianNewPlayersPerYear = median_new_players_per_year,
+    TotalGrowthPercent = round(growth_pct, 1),
+    AnnualizedGrowthRatePercent = round(annualized_growth_rate * 100, 2),
+    LinearGrowthPlayersPerYear = round(unname(coef(growth_model)[["Year"]]), 1)
+  )
+}
+
+new_players_by_level <- bind_rows(lapply(all_levels, function(level) {
+  player_level_years %>%
+    filter(Level == level) %>%
+    distinct(Year, Player) %>%
+    make_new_players_by_year() %>%
+    mutate(Level = level)
+}))
+
+growth_summary <- bind_rows(
+  lapply(all_levels, function(level) {
+    level_series <- new_players_by_level %>%
+      filter(Level == level)
+
+    make_growth_summary(level_series, level)
+  }),
+  make_growth_summary(new_players_by_year, "Combined A-D")
+)
+
+kable(growth_summary)
+```
+
+```{r plot-growth-period}
+growth_period <- new_players_by_year %>%
+  filter(Year >= growth_start_year, Year <= last_year)
+
+ggplot(growth_period, aes(x = Year, y = CumulativeNewPlayers)) +
+  geom_line(color = "steelblue", linewidth = 1.2) +
+  geom_point(aes(size = NewPlayers), color = "tomato", alpha = 0.8) +
+  geom_smooth(method = "lm", se = FALSE, color = "gray30", linewidth = 0.8) +
+  scale_size_continuous(name = "New players") +
+  labs(
+    title = paste("Cumulative Player Growth,", growth_start_year, "to", last_year),
+    subtitle = "Point size shows number of first-time players in each year",
+    x = "Year",
+    y = "Cumulative players"
+  ) +
+  theme_minimal()
 ```
