@@ -175,7 +175,6 @@ growth_period <- new_players_by_year %>%
 ggplot(growth_period, aes(x = Year, y = CumulativeNewPlayers)) +
   geom_line(color = "steelblue", linewidth = 1.2) +
   geom_point(aes(size = NewPlayers), color = "tomato", alpha = 0.8) +
-  geom_smooth(method = "lm", se = FALSE, color = "gray30", linewidth = 0.8) +
   scale_size_continuous(name = "New players") +
   labs(
     title = paste("Cumulative Player Growth,", growth_start_year, "to", last_year),

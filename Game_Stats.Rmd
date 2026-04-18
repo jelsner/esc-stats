@@ -132,10 +132,21 @@ Windy vs non-windy
 ```{r}
 library(dplyr)
 library(tidyr)
+library(ggplot2)
 
-# First: classify each game as windy or not
+min_games_per_wind_condition <- 15
+
+# First: classify each game by wind condition
 df_parsed <- df_parsed %>%
-  mutate(Windy = ifelse(Wind_Avg > 20, "Windy", "Calm"))
+  mutate(
+    Wind_Condition = case_when(
+      Wind_Avg < 10 ~ "Light",
+      Wind_Avg >= 10 & Wind_Avg <= 19 ~ "Moderate",
+      Wind_Avg > 19 ~ "Strong",
+      TRUE ~ NA_character_
+    ),
+    Wind_Condition = factor(Wind_Condition, levels = c("Light", "Moderate", "Strong"))
+  )
 
 # Pivot into long format
 player_games <- df_parsed %>%
@@ -156,25 +167,60 @@ player_games <- df_parsed %>%
     )
   )
 
-# Get total games played
-player_totals <- player_games %>%
-  group_by(Player) %>%
-  summarise(Total_Games = n())
-
-# Now summarize by Player and Windy/Calm
-player_wind_summary <- player_games %>%
-  group_by(Player, Windy) %>%
+# Now summarize by Player and wind condition
+player_wind_summary_all <- player_games %>%
+  filter(!is.na(Wind_Condition)) %>%
+  group_by(Player, Wind_Condition) %>%
   summarise(
     Games = n(),
     Wins = sum(Won, na.rm = TRUE),
-    Win_Pct = round(100 * Wins / Games, 1)
-  ) %>%
-  left_join(player_totals, by = "Player") %>%
-  filter(Total_Games >= 50) %>%
-  select(Player, Total_Games, Windy, Games, Wins, Win_Pct) %>%
-  arrange(Player, desc(Windy))  # optional: sorts so Windy first for each player
+    Win_Pct = round(100 * Wins / Games, 1),
+    .groups = "drop"
+  )
 
-player_wind_summary
+players_with_all_conditions <- player_wind_summary_all %>%
+  group_by(Player) %>%
+  filter(
+    all(c("Light", "Moderate", "Strong") %in% Wind_Condition),
+    all(Games >= min_games_per_wind_condition)
+  ) %>%
+  ungroup() %>%
+  distinct(Player)
+
+player_wind_summary <- player_wind_summary_all %>%
+  semi_join(players_with_all_conditions, by = "Player") %>%
+  group_by(Player) %>%
+  mutate(Total_Games = sum(Games)) %>%
+  ungroup() %>%
+  select(Player, Total_Games, Wind_Condition, Games, Wins, Win_Pct)
+
+player_order <- player_wind_summary %>%
+  filter(Wind_Condition == "Strong") %>%
+  arrange(Win_Pct) %>%
+  pull(Player)
+
+player_wind_summary <- player_wind_summary %>%
+  mutate(Player = factor(Player, levels = player_order)) %>%
+  arrange(Player, Wind_Condition)
+ 
+print(n = 100, player_wind_summary[-c(16,17,18),])
+
+ggplot(player_wind_summary, aes(x = Wind_Condition, y = Win_Pct, group = Player)) +
+  geom_line(color = "gray60", linewidth = 0.8) +
+  geom_point(aes(color = Wind_Condition), size = 3) +
+  facet_wrap(~ Player) +
+  scale_color_manual(values = c("Light" = "steelblue", "Moderate" = "goldenrod", "Strong" = "tomato")) +
+  labs(
+    title = "Win Percentage by Wind Condition",
+    subtitle = paste0(
+      "Light: Wind_Avg < 10 mph; Moderate: 10-19 mph; Strong: > 19 mph. ",
+      "Players shown have at least ", min_games_per_wind_condition, " games in each condition."
+    ),
+    x = "Wind condition",
+    y = "Win percentage",
+    color = "Wind condition"
+  ) +
+  theme_minimal()
 
 ```
 
@@ -462,7 +508,7 @@ elo_history <- map_dfr(seq_along(periods), function(i) {
 })
 
 # Filter to your players
-players_to_plot <- c("Jim Elsner", "Diana Elsner", "JaSun Burdick", "Craig Anderson", "Hank Bass", "Drew Magee", "Jordan Huston", "Scott Schmucker", "Conrad Damon", "Harvey Brandt", "John Elsner", "Mike Prost")
+players_to_plot <- c("Jim Elsner", "Diana Elsner", "JaSun Burdick", "Craig Anderson", "Hank Bass", "Drew Magee", "Jordan Huston", "Scott Schmucker", "Conrad Damon", "John Elsner", "Mike Prost")
 elo_history_filtered <- elo_history %>%
   filter(Player %in% players_to_plot)
 
