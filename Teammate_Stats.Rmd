@@ -1,0 +1,69 @@
+---
+title: "Tally Rally Teammate Stats"
+output: html_document
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup}
+library(dplyr)
+library(readr)
+library(tidyr)
+library(here)
+library(knitr)
+```
+
+Set the player here, then run the notebook.
+
+```{r parameters}
+target_player <- "Diana Elsner"
+minimum_games <- 3
+```
+
+```{r load-data}
+games <- read_csv(
+  here("data", "TallyRallyGames.csv"),
+  show_col_types = FALSE
+) %>%
+  mutate(
+    `Score A` = as.numeric(`Score A`),
+    `Score B` = as.numeric(`Score B`)
+  )
+```
+
+```{r teammate-stats}
+team_a_games <- games %>%
+  filter(`Team A Player 1` == target_player | `Team A Player 2` == target_player) %>%
+  transmute(
+    Teammate = if_else(`Team A Player 1` == target_player, `Team A Player 2`, `Team A Player 1`),
+    Won = `Score A` > `Score B`
+  )
+
+team_b_games <- games %>%
+  filter(`Team B Player 1` == target_player | `Team B Player 2` == target_player) %>%
+  transmute(
+    Teammate = if_else(`Team B Player 1` == target_player, `Team B Player 2`, `Team B Player 1`),
+    Won = `Score B` > `Score A`
+  )
+
+teammate_games <- bind_rows(team_a_games, team_b_games) %>%
+  filter(!is.na(Teammate), Teammate != "")
+
+teammate_summary <- teammate_games %>%
+  group_by(Teammate) %>%
+  summarize(
+    Games = n(),
+    Wins = sum(Won, na.rm = TRUE),
+    Losses = Games - Wins,
+    Win_Pct = round(100 * Wins / Games, 1),
+    .groups = "drop"
+  ) %>%
+  filter(Games >= minimum_games) %>%
+  arrange(desc(Win_Pct), desc(Games), Teammate)
+
+cat("Target player:", target_player, "\n")
+cat("Total teammate games:", nrow(teammate_games), "\n")
+cat("Unique teammates:", n_distinct(teammate_games$Teammate), "\n\n")
+
+print(n = 20, teammate_summary)
+```

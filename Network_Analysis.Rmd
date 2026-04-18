@@ -8,147 +8,42 @@ editor_options:
 
 Build a network graph of Double Disc Court (DDC) players and their teammates to visualize connections in the competitive community
 
-Working with data from https://doubledisccourt.com/results, the basic idea is to: Scrape the event pages to extract teams and players, count participation frequency to identify the top 25 players, build a graph where each edge represents a team, visualize the network in R using {igraph} and optionally {ggraph}
+Working with data from https://doubledisccourt.com/results, the basic idea is to: read the already-scraped team data, count partnership frequency, build a graph where each edge represents a team, and visualize the network in R using {igraph} and {ggraph}.
 
-Install and load required libraries
+The scraping workflow is handled outside this notebook by the update script. Run this when the source website has new tournaments:
+
+```sh
+Rscript scripts/update_ddc_tournament_data.R
+```
+
+Load required libraries and data
 ```{r}
-install.packages(c("rvest", "dplyr", "stringr", "igraph", "ggraph", "tidygraph"))
-
-library(rvest)
 library(dplyr)
-library(stringr)
+library(readr)
 library(igraph)
 library(ggraph)
 library(tidygraph)
+library(here)
 ```
 
-Scrape team data from each event. Start with one tournament url
-
 ```{r}
-library(chromote)
-library(rvest)
+all_teams <- read_csv(
+  here("data", "output", "ddc_team_data.csv"),
+  show_col_types = FALSE
+) %>%
+  mutate(
+    Place = as.character(Place),
+    Player1 = trimws(Player1),
+    Player2 = trimws(Player2)
+  ) %>%
+  filter(
+    !is.na(Player1),
+    !is.na(Player2),
+    Player1 != "",
+    Player2 != ""
+  )
 
-# Load tournament page
-url <- "https://doubledisccourt.com/results/tournament.html?id=603"
-b <- ChromoteSession$new()
-b$Page$navigate(url)
-Sys.sleep(5)  # wait for JS to populate the page
-
-# Extract rendered HTML
-html_doc <- b$DOM$getDocument()
-source <- b$DOM$getOuterHTML(nodeId = html_doc$root$nodeId)[["outerHTML"]]
-page <- read_html(source)
-
-# Extract <li> elements in the tournament result list
-teams <- page %>% html_nodes("ul.form li")
-
-# Skip the header row and parse player names
-team_data <- lapply(teams[-1], function(team) {
-  cells <- team %>% html_nodes("div.dataCell")
-  if (length(cells) >= 2) {
-    names <- cells[2] %>%
-      html_nodes("a") %>%
-      html_text(trim = TRUE)
-    
-    if (length(names) == 2) {
-      data.frame(Player1 = names[1], Player2 = names[2], stringsAsFactors = FALSE)
-    } else {
-      NULL
-    }
-  } else {
-    NULL
-  }
-})
-
-# Combine into a data frame
-df <- bind_rows(team_data)
-print(df)
-```
-
-Loop over all event pages
-```{r}
-library(purrr)
-
-# Function to parse one event
-scrape_ddc_event <- function(id) {
-  print(id)
-  url <- paste0("https://doubledisccourt.com/results/tournament.html?id=", id)
-  b <- ChromoteSession$new()
-  b$Page$navigate(url)
-  Sys.sleep(5)
-
-  html_doc <- b$DOM$getDocument()
-  source <- b$DOM$getOuterHTML(nodeId = html_doc$root$nodeId)[["outerHTML"]]
-  b$close()
-
-  page <- read_html(source)
-
-  # Check for King-style or solo-format events
-  if (grepl("King of the Court|Monarch of the Court|Solo format", page %>% html_text(), ignore.case = TRUE)) {
-    return(NULL)
-  }
-
-  # Extract year from <title>
-  title_text <- page %>% html_node("title") %>% html_text()
-  year_match <- str_extract(title_text, "\\b(19|20)\\d{2}\\b")
-  event_year <- ifelse(is.na(year_match), NA, as.integer(year_match))
-
-  # Get all division headers and corresponding result lists
-  headers <- page %>% html_nodes("div.header")
-  result_lists <- page %>% html_nodes("ul.form")
-
-  # Safety check
-  if (length(headers) == 0 || length(headers) != length(result_lists)) return(NULL)
-
-  all_divisions <- list()
-
-  for (i in seq_along(headers)) {
-    div_name <- headers[i] %>% html_text(trim = TRUE)
-    teams <- result_lists[[i]] %>% html_nodes("li")
-
-    if (length(teams) < 2) next
-
-    # Parse each <li> in the division's result list
-    team_data <- lapply(teams[-1], function(team) {
-      cells <- team %>% html_nodes("div.dataCell")
-      if (length(cells) >= 2) {
-        place <- cells[1] %>% html_text(trim = TRUE)
-        names <- cells[2] %>% html_nodes("a") %>% html_text(trim = TRUE)
-
-        if (length(names) == 2) {
-          return(data.frame(
-            Year = event_year,
-            Division = div_name,
-            Place = place,
-            Player1 = names[1],
-            Player2 = names[2],
-            TournamentID = id,
-            stringsAsFactors = FALSE
-          ))
-        }
-      }
-      return(NULL)
-    })
-
-    all_divisions[[i]] <- bind_rows(team_data)
-  }
-
-  df <- bind_rows(all_divisions)
-  if (nrow(df) == 0) return(NULL)
-  return(df)
-}
-
-# Loop through a range of event IDs
-event_ids <- 1:602
-
-all_teams <- map_dfr(event_ids, possibly(scrape_ddc_event, NULL))
-
-# Save to CSV
-write.csv(all_teams, "data/output/ddc_team_data.csv", row.names = FALSE)
-
-# View a sample
-print(head(all_teams))
-
+glimpse(all_teams)
 ```
 
 Code to create and plot the network graph
@@ -160,7 +55,7 @@ library(tidygraph)
 
 # Step 1: Filter to Open Division since xxxx
 filtered_data <- all_teams %>%
-  filter(Division == "Open", Year >= 2020, Place %in% c("1", "2", "3"))
+  filter(Division == "Open", Year >= 2021, Place %in% c("1", "2", "3"))
 
 # Step 2: Count pairings (treat A-B and B-A as the same team)
 pair_counts <- filtered_data %>%
@@ -190,7 +85,7 @@ ggraph(tg, layout = "fr") +
 #    labels = c("5", "10", "20", "40"),
 #    name = "Count"
 #  ) +
-  labs(title = " DDC Open Division Player Network (1995–present, Winning Teams)") +
+  labs(title = " DDC Open Division Player Network (2021–present)") +
   theme_void()
 ```
 
@@ -214,7 +109,7 @@ node_df_sorted <- node_df %>%
   arrange(desc(Degree))
 
 # View the top
-head(node_df_sorted)
+print(node_df_sorted)
 ```
 
 What is Betweenness Centrality? Betweenness centrality measures:
@@ -248,8 +143,6 @@ ggraph(tg, layout = "fr") +
   labs(title = "DDC Player Network\nNode Size = Betweenness Centrality") +
   theme_void()
 ```
-
-
 
 By decade
 ```{r}
@@ -375,26 +268,6 @@ image_write(full_layout, path = "data/output/ddc_decade_networks/ddc_networks_2x
 ```
 
 
-```{r}
-install.packages("magick")
-library(magick)
-
-img1 <- image_read("data/output/ddc_decade_networks/ddc_network_1985-1994.png")
-img2 <- image_read("data/output/ddc_decade_networks/ddc_network_1995-2004.png")
-img3 <- image_read("data/output/ddc_decade_networks/ddc_network_2005-2014.png")
-img4 <- image_read("data/output/ddc_decade_networks/ddc_network_2015-2024.png")
-
-# First row: 1985–1994 and 1995–2004
-row1 <- image_append(c(img1, img2))
-
-# Second row: 2005–2014 and 2015–2024
-row2 <- image_append(c(img3, img4))
-
-# Stack rows vertically
-final_image <- image_append(c(row1, row2), stack = TRUE)
-image_write(final_image, path = "data/output/ddc_decade_networks/ddc_network_2x2.png", format = "png")
-```
-
 Ego-centric network
 ```{r}
 library(dplyr)
@@ -403,7 +276,7 @@ library(ggraph)
 library(tidygraph)
 
 # Set your target player
-target_player <- "Jim Elsner"
+target_player <- "John Elsner"
 
 # Filter all pairings involving the player
 ego_pairs <- all_teams %>%
@@ -557,7 +430,7 @@ library(tidygraph)
 library(dplyr)
 
 # Load DDC data
-ddc_data <- read.csv("data/output/ddc_team_data.csv", stringsAsFactors = FALSE)
+ddc_data <- all_teams
 
 # UI
 ui <- fluidPage(
@@ -651,21 +524,5 @@ server <- function(input, output, session) {
 shinyApp(ui = ui, server = server)
 ```
 
-Once this successfully runs locally then try to deploy it. Copy the entire code chunk to a file called app.R. Put that file in a separate directory. Put your data in that same directory. Change the read.csv() function to point to this new directory.
-
-Deploy it
-```{r}
-install.packages("rsconnect")
-
-library(rsconnect)
-
-rsconnect::setAccountInfo(name='jameselsner',
-			  token='C715F8CF8311C0BE753AC0545FA37D56',
-			  secret='gkgAYlb5SCVKZDIaQb4VG3Vr/23xQOXp8urmMaRj')
-
-
-
-```
-
-
+For deployment, use the maintained app in `player-team-network/app.R`. Copy an updated `data/output/ddc_team_data.csv` to `player-team-network/ddc_team_data.csv` before deploying.
 
