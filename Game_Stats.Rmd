@@ -203,7 +203,7 @@ player_wind_summary <- player_wind_summary %>%
   mutate(Player = factor(Player, levels = player_order)) %>%
   arrange(Player, Wind_Condition)
  
-print(n = 100, player_wind_summary[-c(16,17,18),])
+print(n = 100, player_wind_summary)
 
 ggplot(player_wind_summary, aes(x = Wind_Condition, y = Win_Pct, group = Player)) +
   geom_line(color = "gray60", linewidth = 0.8) +
