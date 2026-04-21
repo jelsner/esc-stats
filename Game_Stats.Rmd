@@ -134,7 +134,7 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 
-min_games_per_wind_condition <- 15
+min_games_per_wind_condition <- 10
 
 # First: classify each game by wind condition
 df_parsed <- df_parsed %>%
