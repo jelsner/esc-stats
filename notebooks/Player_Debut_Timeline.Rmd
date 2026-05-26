@@ -162,7 +162,6 @@ ggraph(tg_strong, layout = "fr") +
   ) +
   theme_void()
 
-```
 
 
 
