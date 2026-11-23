@@ -1,7 +1,6 @@
 ---
 title: "New DDC Players by Year"
 output: html_document
-date: "2025-07-02"
 editor_options:
   chunk_output_type: console
 ---

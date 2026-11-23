@@ -18,13 +18,6 @@ The scraper functions live in `scripts/ddc_scraper.R`; this notebook is now for 
 source("scripts/update_ddc_tournament_data.R")
 ```
 
-Scrape one tournament by ID:
-
-```{r scrape-one, eval=FALSE}
-event <- scrape_ddc_event(624)
-head(event)
-```
-
 Scrape a known range and save the full tournament data:
 
 ```{r scrape-range, eval=FALSE}
