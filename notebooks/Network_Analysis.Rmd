@@ -33,7 +33,7 @@ tournament_results <- read_csv(
 )
 
 tournament_dates <- tournament_results %>%
-  distinct(TournamentID, EventStartDate, EventEndDate)
+  distinct(TournamentID, TournamentName, EventStartDate, EventEndDate)
 
 all_teams <- read_csv(
   here("data", "output", "ddc_team_data.csv"),
@@ -57,13 +57,19 @@ all_teams <- read_csv(
 latest_data_year <- as.integer(max(all_teams$Year, na.rm = TRUE))
 latest_event_end <- max(all_teams$EventEndDate, na.rm = TRUE)
 current_year <- as.integer(format(Sys.Date(), "%Y"))
-latest_year_is_partial <- latest_data_year == current_year
+season_end_tournament <- "US DDC Championships"
+latest_year_has_season_end <- any(
+  all_teams$Year == latest_data_year &
+    grepl(season_end_tournament, all_teams$TournamentName, fixed = TRUE),
+  na.rm = TRUE
+)
+latest_year_is_partial <- latest_data_year == current_year && !latest_year_has_season_end
 network_start_year <- 2021L
 
 glimpse(all_teams)
 ```
 
-All network sections below use every available result unless a section chooses an explicit start year. There is no hard-coded upper cutoff, so the latest tournament year is included automatically. When that latest year is the current calendar year, it is marked as partial rather than interpreted as a complete season.
+All network sections below use every available result unless a section chooses an explicit start year. There is no hard-coded upper cutoff, so the latest tournament year is included automatically. A current calendar year is marked as partial only until its season-ending US DDC Championships result is available.
 
 Code to create and plot the network graph
 ```{r}

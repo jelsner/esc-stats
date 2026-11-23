@@ -30,7 +30,13 @@ growth_start_year <- 2010L
 latest_data_year <- as.integer(max(ddc_data$Year, na.rm = TRUE))
 latest_event_end <- max(ddc_data$EventEndDate, na.rm = TRUE)
 current_year <- as.integer(format(Sys.Date(), "%Y"))
-latest_year_is_partial <- latest_data_year == current_year
+season_end_tournament <- "US DDC Championships"
+latest_year_has_season_end <- any(
+  ddc_data$Year == latest_data_year &
+    grepl(season_end_tournament, ddc_data$TournamentName, fixed = TRUE),
+  na.rm = TRUE
+)
+latest_year_is_partial <- latest_data_year == current_year && !latest_year_has_season_end
 complete_data_year <- if (latest_year_is_partial) {
   latest_data_year - 1L
 } else {
@@ -38,7 +44,7 @@ complete_data_year <- if (latest_year_is_partial) {
 }
 ```
 
-This analysis counts a player as "new" in the first year they appear in the filtered tournament data. The available data runs through `r latest_data_year` (last event ending `r format(latest_event_end, "%B %d, %Y")`). Debut counts include that year so current-year appearances are visible, but the current calendar year is treated as partial. Therefore, annual growth summaries stop at the latest complete year, `r complete_data_year`, rather than treating a partial season as a full year.
+This analysis counts a player as "new" in the first year they appear in the filtered tournament data. The available data runs through `r latest_data_year` (last event ending `r format(latest_event_end, "%B %d, %Y")`). Debut counts include every available year. A current calendar year is treated as complete once the season-ending `r season_end_tournament` result is present; otherwise it is partial. Annual growth summaries therefore run through `r complete_data_year`.
 
 ```{r build-player-debuts}
 player_level_years <- ddc_data %>%
@@ -120,7 +126,7 @@ ggplot(new_players_by_year, aes(x = Year, y = CumulativeNewPlayers)) +
 
 ## Growth By Tournament Level
 
-The growth statistics below use complete years only. The partial current-year snapshot is shown separately after the table.
+The growth statistics below use complete years only. Any unavailable current-year snapshot is shown separately after the table.
 
 ```{r growth-by-level}
 make_growth_summary <- function(series, label, start_year = growth_start_year, end_year = complete_data_year) {

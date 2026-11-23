@@ -3,11 +3,11 @@ Escape!! frisbee game stats
 
 ## Analysis Year Policy
 
-Player-growth summaries treat the current calendar year as partial. Exploratory debut and network views include the latest available year, but annual growth rates and long-run growth summaries use only completed calendar years. Year endpoints are derived from the data rather than hard-coded.
+Player-growth and network analyses include the latest available year. A current calendar year is treated as complete once the season-ending US DDC Championships result is present; before then it is treated as partial. Year endpoints are derived from the data rather than hard-coded.
 
 ## Update DDC Tournament Data
 
-The reusable scraper lives in `R/ddc_scraper.R`. Run this command whenever new tournaments have been added to doubledisccourt.com:
+The reusable scraper lives in `scripts/ddc_scraper.R`. Run this command whenever new tournaments have been added to doubledisccourt.com:
 
 ```sh
 Rscript scripts/update_ddc_tournament_data.R

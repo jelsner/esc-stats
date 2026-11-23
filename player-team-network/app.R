@@ -7,11 +7,8 @@ library(dplyr)
 # Load DDC data
 ddc_data <- read.csv("ddc_team_data.csv", stringsAsFactors = FALSE)
 
-# Keep the default endpoint in sync with the available data. The latest year is
-# included by default; when it is the current calendar year it may be partial.
+# Keep the default endpoint in sync with the available data.
 latest_data_year <- as.integer(max(ddc_data$Year, na.rm = TRUE))
-current_year <- as.integer(format(Sys.Date(), "%Y"))
-latest_year_is_partial <- latest_data_year == current_year
 default_year_start <- 2010L
 default_year_end <- latest_data_year
 
@@ -23,10 +20,7 @@ ui <- fluidPage(
     sidebarPanel(
       selectInput("division", "Division:", choices = c("Any", "Open", "Women"), selected = "Open"),
       helpText("Only players active in the selected year range and division will appear."),
-      helpText(paste0(
-        "Latest available year: ", latest_data_year,
-        if (latest_year_is_partial) " (partial current year; included by default)." else " (included by default)."
-      )),
+      helpText(paste0("Latest available year: ", latest_data_year, " (included by default).")),
       sliderInput("year_range", "Year range:",
                   min = min(ddc_data$Year, na.rm = TRUE),
                   max = latest_data_year,

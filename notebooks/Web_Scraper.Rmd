@@ -12,10 +12,10 @@ Use the command-line updater when new tournaments are added:
 Rscript scripts/update_ddc_tournament_data.R
 ```
 
-The scraper functions live in `R/ddc_scraper.R`; this notebook is now for inspection and one-off runs.
+The scraper functions live in `scripts/ddc_scraper.R`; this notebook is now for inspection and one-off runs.
 
 ```{r setup}
-source("R/ddc_scraper.R")
+source("scripts/update_ddc_tournament_data.R")
 ```
 
 Scrape one tournament by ID:
@@ -28,16 +28,30 @@ head(event)
 Scrape a known range and save the full tournament data:
 
 ```{r scrape-range, eval=FALSE}
-event_ids <- 1:624
-all_tournaments <- scrape_ddc_events(event_ids)
+existing_data <- read_existing_data("data/output/ddc_full_tournament_data_auto.csv")
+latest_tournament_id <- if (is.null(existing_data)) {
+  0L
+} else {
+  max(existing_data$TournamentID, na.rm = TRUE)
+}
+event_ids <- seq(latest_tournament_id + 1L, latest_tournament_id + 50L)
 
-write.csv(
-  all_tournaments,
-  "data/output/ddc_full_tournament_data.csv",
-  row.names = FALSE
+new_tournaments <- scrape_ddc_events(event_ids, delay_seconds = 2)
+new_tournaments <- normalize_tournament_data(new_tournaments)
+
+combined <- dedupe_tournament_rows(
+  dplyr::bind_rows(existing_data, new_tournaments)
+)
+write_tournament_csv(
+  combined,
+  "data/output/ddc_full_tournament_data_auto.csv"
+)
+write_tournament_csv(
+  make_team_data(combined),
+  "data/output/ddc_team_data.csv"
 )
 
-head(all_tournaments)
+head(combined)
 ```
 
 For routine updates, prefer the script because it automatically starts after the highest existing `TournamentID`, appends newly found rows, removes duplicate tournament/team rows, and updates the team-only CSV.
