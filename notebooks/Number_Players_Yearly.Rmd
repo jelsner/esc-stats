@@ -23,11 +23,22 @@ ddc_data <- read_csv(
 
 all_levels <- c("A", "B", "C", "D")
 included_divisions <- "Open"
-last_year <- 2026
-growth_start_year <- 2010
+growth_start_year <- 2010L
+
+# Derive every endpoint from the available data. The current calendar year is
+# treated as partial until the year has ended.
+latest_data_year <- as.integer(max(ddc_data$Year, na.rm = TRUE))
+latest_event_end <- max(ddc_data$EventEndDate, na.rm = TRUE)
+current_year <- as.integer(format(Sys.Date(), "%Y"))
+latest_year_is_partial <- latest_data_year == current_year
+complete_data_year <- if (latest_year_is_partial) {
+  latest_data_year - 1L
+} else {
+  latest_data_year
+}
 ```
 
-This analysis counts a player as "new" in the first year they appear in the filtered tournament data. The plots use Open division results from A-D level tournaments through `r last_year`. The hard-coded `last_year` excludes incomplete current-year data.
+This analysis counts a player as "new" in the first year they appear in the filtered tournament data. The available data runs through `r latest_data_year` (last event ending `r format(latest_event_end, "%B %d, %Y")`). Debut counts include that year so current-year appearances are visible, but the current calendar year is treated as partial. Therefore, annual growth summaries stop at the latest complete year, `r complete_data_year`, rather than treating a partial season as a full year.
 
 ```{r build-player-debuts}
 player_level_years <- ddc_data %>%
@@ -35,7 +46,6 @@ player_level_years <- ddc_data %>%
     Division %in% included_divisions,
     Level %in% all_levels,
     !is.na(Year),
-    Year <= last_year
   ) %>%
   select(Year, Level, Player1, Player2) %>%
   pivot_longer(
@@ -47,7 +57,7 @@ player_level_years <- ddc_data %>%
   filter(!is.na(Player), Player != "") %>%
   distinct(Year, Level, Player)
 
-make_new_players_by_year <- function(player_years, end_year = last_year) {
+make_new_players_by_year <- function(player_years, end_year = latest_data_year) {
   player_debuts <- player_years %>%
     group_by(Player) %>%
     summarize(FirstYear = min(Year), .groups = "drop")
@@ -60,7 +70,14 @@ make_new_players_by_year <- function(player_years, end_year = last_year) {
     right_join(tibble(Year = year_range), by = "Year") %>%
     mutate(NewPlayers = replace_na(NewPlayers, 0L)) %>%
     arrange(Year) %>%
-    mutate(CumulativeNewPlayers = cumsum(NewPlayers))
+    mutate(
+      CumulativeNewPlayers = cumsum(NewPlayers),
+      YearStatus = if_else(
+        Year == latest_data_year & latest_year_is_partial,
+        "Partial current year",
+        "Complete year"
+      )
+    )
 }
 
 player_years_all_levels <- player_level_years %>%
@@ -73,8 +90,12 @@ kable(tail(new_players_by_year, 10))
 ```
 
 ```{r plot-new-players}
-ggplot(new_players_by_year, aes(x = Year, y = NewPlayers)) +
-  geom_col(fill = "steelblue") +
+ggplot(new_players_by_year, aes(x = Year, y = NewPlayers, fill = YearStatus)) +
+  geom_col() +
+  scale_fill_manual(
+    values = c("Complete year" = "steelblue", "Partial current year" = "lightblue"),
+    guide = "none"
+  ) +
   labs(
     title = "New Open Division DDC Players by First Appearance Year",
     subtitle = "A-D level tournaments",
@@ -97,10 +118,12 @@ ggplot(new_players_by_year, aes(x = Year, y = CumulativeNewPlayers)) +
   theme_minimal()
 ```
 
-## Growth By Tournament Level, 2010-2025
+## Growth By Tournament Level
+
+The growth statistics below use complete years only. The partial current-year snapshot is shown separately after the table.
 
 ```{r growth-by-level}
-make_growth_summary <- function(series, label, start_year = growth_start_year, end_year = last_year) {
+make_growth_summary <- function(series, label, start_year = growth_start_year, end_year = complete_data_year) {
   growth_period <- series %>%
     filter(Year >= start_year, Year <= end_year)
 
@@ -168,16 +191,28 @@ growth_summary <- bind_rows(
 kable(growth_summary)
 ```
 
+```{r partial-year-snapshot}
+partial_year_snapshot <- new_players_by_year %>%
+  filter(Year > complete_data_year) %>%
+  select(Year, NewPlayers, CumulativeNewPlayers, YearStatus)
+
+if (nrow(partial_year_snapshot) > 0) {
+  kable(partial_year_snapshot)
+} else {
+  message("No partial current-year data is available after the latest complete year.")
+}
+```
+
 ```{r plot-growth-period}
 growth_period <- new_players_by_year %>%
-  filter(Year >= growth_start_year, Year <= last_year)
+  filter(Year >= growth_start_year, Year <= complete_data_year)
 
 ggplot(growth_period, aes(x = Year, y = CumulativeNewPlayers)) +
   geom_line(color = "steelblue", linewidth = 1.2) +
   geom_point(aes(size = NewPlayers), color = "tomato", alpha = 0.8) +
   scale_size_continuous(name = "New players") +
   labs(
-    title = paste("Cumulative Player Growth,", growth_start_year, "to", last_year),
+    title = paste("Cumulative Player Growth,", growth_start_year, "to", complete_data_year),
     subtitle = "Point size shows number of first-time players in each year",
     x = "Year",
     y = "Cumulative players"

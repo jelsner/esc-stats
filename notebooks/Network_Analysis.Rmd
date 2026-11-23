@@ -27,10 +27,19 @@ library(here)
 ```
 
 ```{r}
+tournament_results <- read_csv(
+  here("data", "output", "ddc_full_tournament_data_auto.csv"),
+  show_col_types = FALSE
+)
+
+tournament_dates <- tournament_results %>%
+  distinct(TournamentID, EventStartDate, EventEndDate)
+
 all_teams <- read_csv(
   here("data", "output", "ddc_team_data.csv"),
   show_col_types = FALSE
 ) %>%
+  left_join(tournament_dates, by = "TournamentID") %>%
   mutate(
     Place = as.character(Place),
     Player1 = trimws(Player1),
@@ -43,8 +52,18 @@ all_teams <- read_csv(
     Player2 != ""
   )
 
+# Network endpoints are derived from the data. The current calendar year is
+# retained in exploratory network views, but labeled as partial.
+latest_data_year <- as.integer(max(all_teams$Year, na.rm = TRUE))
+latest_event_end <- max(all_teams$EventEndDate, na.rm = TRUE)
+current_year <- as.integer(format(Sys.Date(), "%Y"))
+latest_year_is_partial <- latest_data_year == current_year
+network_start_year <- 2021L
+
 glimpse(all_teams)
 ```
+
+All network sections below use every available result unless a section chooses an explicit start year. There is no hard-coded upper cutoff, so the latest tournament year is included automatically. When that latest year is the current calendar year, it is marked as partial rather than interpreted as a complete season.
 
 Code to create and plot the network graph
 ```{r}
@@ -53,9 +72,14 @@ library(igraph)
 library(ggraph)
 library(tidygraph)
 
-# Step 1: Filter to Open Division since xxxx
+# Open division podium pairings from a fixed analysis start through the latest year.
 filtered_data <- all_teams %>%
-  filter(Division == "Open", Year >= 2021, Place %in% c("1", "2", "3"))
+  filter(
+    Division == "Open",
+    !is.na(Year),
+    Year >= network_start_year,
+    Place %in% c("1", "2", "3")
+  )
 
 # Step 2: Count pairings (treat A-B and B-A as the same team)
 pair_counts <- filtered_data %>%
@@ -85,7 +109,7 @@ ggraph(tg, layout = "fr") +
 #    labels = c("5", "10", "20", "40"),
 #    name = "Count"
 #  ) +
-  labs(title = " DDC Open Division Player Network (2021–present)") +
+  labs(title = paste0("DDC Open Division Player Network (", network_start_year, "–", latest_data_year, ")")) +
   theme_void()
 ```
 
@@ -152,21 +176,34 @@ library(ggraph)
 library(tidygraph)
 library(RColorBrewer)
 
-# Define decade ranges and output folder
-decades <- list(
-  "1985-1994" = 1985:1994,
-  "1995–2004" = 1995:2004,
-  "2005–2014" = 2005:2014,
-  "2015–2024" = 2015:2024
+# Define periods from fixed historical starts through the latest available year.
+# The final period is dynamic and is labeled as partial when it contains the
+# current calendar year.
+latest_period_label <- paste0("2015-", latest_data_year)
+if (latest_year_is_partial) {
+  latest_period_label <- paste0(latest_period_label, " (partial)")
+}
+
+period_labels <- c("1985-1994", "1995-2004", "2005-2014", latest_period_label)
+period_years <- list(
+  1985:1994,
+  1995:2004,
+  2005:2014,
+  2015:latest_data_year
 )
+decades <- setNames(period_years, period_labels)
 
-# Create an output folder
-output_dir <- "data/output/ddc_decade_networks"
+# Create an output folder and track the images that are actually generated.
+output_dir <- here("data", "output", "ddc_decade_networks")
 dir.create(output_dir, showWarnings = FALSE)
+generated_network_images <- character()
+generated_network_labels <- character()
 
-# Loop through decades and generate plots
+# Loop through periods and generate plots
 for (label in names(decades)) {
   years <- decades[[label]]
+  label_slug <- gsub("[^0-9A-Za-z]+", "-", label)
+  label_slug <- sub("-+$", "", label_slug)
 
   df <- all_teams %>%
     filter(Division == "Open", Year %in% years) %>%
@@ -190,7 +227,7 @@ for (label in names(decades)) {
   E(tg)$team_count <- df$team_count
 
   # Save to PNG
-  file_name <- paste0(output_dir, "/ddc_network_", gsub("–", "-", label), ".png")
+  file_name <- file.path(output_dir, paste0("ddc_network_", label_slug, ".png"))
   png(file_name, width = 1200, height = 900, res = 150)
 
 print(
@@ -208,6 +245,8 @@ print(
 )
 
   dev.off()
+  generated_network_images <- c(generated_network_images, file_name)
+  generated_network_labels <- c(generated_network_labels, label)
   message("Saved ", file_name)
 }
 
@@ -232,18 +271,18 @@ process_image <- function(path, title, border_color = "gray", border_size = "5x5
     )
 }
 
-# Step 1: Load and process each image
-img1 <- process_image("data/output/ddc_decade_networks/ddc_network_1985-1994.png", "1985–1994")
-img2 <- process_image("data/output/ddc_decade_networks/ddc_network_1995-2004.png", "1995–2004")
-img3 <- process_image("data/output/ddc_decade_networks/ddc_network_2005-2014.png", "2005–2014")
-img4 <- process_image("data/output/ddc_decade_networks/ddc_network_2015-2024.png", "2015–2024")
+# Step 1: Load and process each image saved by the period loop
+network_image_paths <- generated_network_images
+images <- lapply(seq_along(network_image_paths), function(i) {
+  process_image(network_image_paths[i], generated_network_labels[i])
+})
 
-# Step 2: Append into 2 rows
-row1 <- image_append(c(img1, img2))
-row2 <- image_append(c(img3, img4))
-
-# Step 3: Stack vertically for 2 × 2 grid
-final_image <- image_append(c(row1, row2), stack = TRUE)
+# Step 2 and 3: Append into rows, then stack vertically for a grid
+image_rows <- lapply(seq(1, length(images), by = 2), function(i) {
+  row_images <- do.call(c, images[i:min(i + 1, length(images))])
+  image_append(row_images)
+})
+final_image <- image_append(do.call(c, image_rows), stack = TRUE)
 
 # Step 4: Create a title banner image
 title_banner <- image_blank(
@@ -252,7 +291,7 @@ title_banner <- image_blank(
   color = "white"
 ) %>%
   image_annotate(
-    "DDC Open Division Player Networks by Decade (3+ Pairings)",
+    "DDC Open Division Player Networks by Period (3+ Pairings)",
     size = 50,
     gravity = "center",
     color = "black",
@@ -264,7 +303,7 @@ title_banner <- image_blank(
 full_layout <- image_append(c(title_banner, final_image), stack = TRUE)
 
 # Step 6: Save final image
-image_write(full_layout, path = "data/output/ddc_decade_networks/ddc_networks_2x2_full_title.png", format = "png")
+image_write(full_layout, path = file.path(output_dir, "ddc_networks_2x2_full_title.png"), format = "png")
 ```
 
 
@@ -441,8 +480,12 @@ ui <- fluidPage(
       selectInput("division", "Division:", choices = c("Any", "Open", "Women"), selected = "Open"),
       sliderInput("year_range", "Year range:",
                   min = min(ddc_data$Year, na.rm = TRUE),
-                  max = max(ddc_data$Year, na.rm = TRUE),
-                  value = c(2010, 2024), sep = "", step = 1),
+                  max = latest_data_year,
+                  value = c(2010, latest_data_year), sep = "", step = 1),
+      helpText(paste0(
+        "The latest available year (", latest_data_year,
+        if (latest_year_is_partial) ") is partial and included by default." else ") is included by default."
+      )),
       selectInput("player", "Select a player:", choices = NULL),
       numericInput("level", "Network depth (1 = teammates only, 2 = teammates-of-teammates):",
                    value = 2, min = 1, max = 3)

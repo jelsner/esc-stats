@@ -7,6 +7,14 @@ library(dplyr)
 # Load DDC data
 ddc_data <- read.csv("ddc_team_data.csv", stringsAsFactors = FALSE)
 
+# Keep the default endpoint in sync with the available data. The latest year is
+# included by default; when it is the current calendar year it may be partial.
+latest_data_year <- as.integer(max(ddc_data$Year, na.rm = TRUE))
+current_year <- as.integer(format(Sys.Date(), "%Y"))
+latest_year_is_partial <- latest_data_year == current_year
+default_year_start <- 2010L
+default_year_end <- latest_data_year
+
 # UI
 ui <- fluidPage(
   titlePanel("Double Disc Court Network (ego) Viewer"),
@@ -15,10 +23,14 @@ ui <- fluidPage(
     sidebarPanel(
       selectInput("division", "Division:", choices = c("Any", "Open", "Women"), selected = "Open"),
       helpText("Only players active in the selected year range and division will appear."),
+      helpText(paste0(
+        "Latest available year: ", latest_data_year,
+        if (latest_year_is_partial) " (partial current year; included by default)." else " (included by default)."
+      )),
       sliderInput("year_range", "Year range:",
                   min = min(ddc_data$Year, na.rm = TRUE),
-                  max = max(ddc_data$Year, na.rm = TRUE),
-                  value = c(2010, 2024), sep = "", step = 1),
+                  max = latest_data_year,
+                  value = c(default_year_start, default_year_end), sep = "", step = 1),
       selectInput("player", "Select a player:", choices = NULL),
       numericInput("level", "Network depth (1 = teammates only, 2 = teammates-of-teammates):",
                    value = 2, min = 1, max = 3)
