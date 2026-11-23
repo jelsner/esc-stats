@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-source("R/ddc_scraper.R")
+source("scripts/ddc_scraper.R")
 
 parse_cli_args <- function(args) {
   values <- list(
