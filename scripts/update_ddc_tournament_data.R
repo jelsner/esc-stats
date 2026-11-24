@@ -164,7 +164,16 @@ write_tournament_csv <- function(data, path) {
 }
 
 make_team_data <- function(data) {
-  cols <- c("Year", "Division", "Place", "Player1", "Player2", "TournamentID")
+  cols <- c(
+    "Year",
+    "Division",
+    "Place",
+    "Player1",
+    "Player2",
+    "TournamentID",
+    "EventStartDate",
+    "EventEndDate"
+  )
   missing <- setdiff(cols, names(data))
   if (length(missing) > 0) {
     stop("Cannot write team output. Missing columns: ", paste(missing, collapse = ", "), call. = FALSE)

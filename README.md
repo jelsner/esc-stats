@@ -3,7 +3,7 @@ Escape!! frisbee game stats
 
 ## Analysis Year Policy
 
-Player-growth and network analyses include the latest available year. A current calendar year is treated as complete once the season-ending US DDC Championships result is present; before then it is treated as partial. Year endpoints are derived from the data rather than hard-coded.
+Player-growth and network analyses include the latest available year. A year is treated as complete when its latest recorded event ends on or after December 15; otherwise it is marked as possibly incomplete. Year endpoints are derived from event dates rather than hard-coded.
 
 ## Update DDC Tournament Data
 
